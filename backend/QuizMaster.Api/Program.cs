@@ -195,38 +195,20 @@ app.Run();
 static string ParsePostgresConnectionString(string raw)
 {
     if (string.IsNullOrWhiteSpace(raw)) return raw;
+    raw = raw.Trim().Trim('"', '\'');
 
     if (raw.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
         raw.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
     {
-        try
+        var match = System.Text.RegularExpressions.Regex.Match(raw, @"^postgres(?:ql)?://([^:]+):([^@]+)@([^:/]+)(?::(\d+))?/(.+)$");
+        if (match.Success)
         {
-            var standardUriString = raw.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase)
-                ? "postgres://" + raw[13..]
-                : raw;
-
-            var uri = new Uri(standardUriString);
-            var userInfo = uri.UserInfo.Split(':');
-            var username = userInfo.Length > 0 ? Uri.UnescapeDataString(userInfo[0]) : "";
-            var password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : "";
-            var host = uri.Host;
-            var port = uri.Port > 0 ? uri.Port : 5432;
-            var database = uri.AbsolutePath.TrimStart('/');
-
-            return $"Host={host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Prefer;Trust Server Certificate=true;";
-        }
-        catch
-        {
-            var match = System.Text.RegularExpressions.Regex.Match(raw, @"^postgres(?:ql)?://([^:]+):([^@]+)@([^:/]+)(?::(\d+))?/(.+)$");
-            if (match.Success)
-            {
-                var user = Uri.UnescapeDataString(match.Groups[1].Value);
-                var pass = Uri.UnescapeDataString(match.Groups[2].Value);
-                var host = match.Groups[3].Value;
-                var port = match.Groups[4].Success ? match.Groups[4].Value : "5432";
-                var db = match.Groups[5].Value;
-                return $"Host={host};Port={port};Database={db};Username={user};Password={pass};SSL Mode=Prefer;Trust Server Certificate=true;";
-            }
+            var user = Uri.UnescapeDataString(match.Groups[1].Value);
+            var pass = Uri.UnescapeDataString(match.Groups[2].Value);
+            var host = match.Groups[3].Value;
+            var port = match.Groups[4].Success ? match.Groups[4].Value : "5432";
+            var db = match.Groups[5].Value;
+            return $"Host={host};Port={port};Database={db};Username={user};Password={pass};SSL Mode=Prefer;Trust Server Certificate=true;";
         }
     }
 
