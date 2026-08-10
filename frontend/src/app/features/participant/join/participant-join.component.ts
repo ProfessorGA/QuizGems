@@ -218,11 +218,10 @@ export class ParticipantJoinComponent {
         this.state.setParticipantSession(res);
         try {
           await this.signalR.startConnection(code, res.participantId, false);
-          this.router.navigate(['/participant/waiting']);
+          this.state.navigateParticipant('waiting');
         } catch (err) {
           console.error('Could not connect SignalR hub:', err);
-          // Navigate to waiting regardless so reconnection kicks in
-          this.router.navigate(['/participant/waiting']);
+          this.state.navigateParticipant('waiting');
         } finally {
           this.isLoading.set(false);
         }

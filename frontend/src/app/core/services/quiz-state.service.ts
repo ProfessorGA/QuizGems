@@ -1,5 +1,6 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import {
   JoinSessionResponse,
   ParticipantStateDto,
@@ -10,9 +11,11 @@ import {
   ScoreboardEntryDto,
   ParticipantHubDto,
   FinalScoreboardDto,
-  SessionStatus
+  SessionStatus,
+  QuestionStatus
 } from '../models/quiz.models';
 import { QuizSignalRService } from './quiz-signalr.service';
+import { ParticipantApiService } from './participant-api.service';
 import { SoundService } from './sound.service';
 
 @Injectable({
@@ -55,10 +58,27 @@ export class QuizStateService {
   constructor(
     private signalR: QuizSignalRService,
     private sound: SoundService,
-    private router: Router
+    private router: Router,
+    private participantApi: ParticipantApiService
   ) {
     this.restoreSessionFromStorage();
     this.subscribeToRealtimeEvents();
+  }
+
+  public getQueryParams(): { code: string; id: string } {
+    return {
+      code: this.sessionCode(),
+      id: this.participant()?.participantId || ''
+    };
+  }
+
+  public navigateParticipant(path: string): void {
+    const qp = this.getQueryParams();
+    if (qp.code && qp.id) {
+      this.router.navigate([`/participant/${path}`], { queryParams: qp });
+    } else {
+      this.router.navigate([`/participant/${path}`]);
+    }
   }
 
   private restoreSessionFromStorage(): void {
@@ -74,6 +94,68 @@ export class QuizStateService {
         this.durationSeconds.set(parsed.questionDurationSeconds || 15);
       } catch {}
     }
+  }
+
+  public async syncWithServerState(code?: string, id?: string): Promise<boolean> {
+    const sessionCode = (code || this.sessionCode()).trim().toUpperCase();
+    const participantId = id || this.participant()?.participantId;
+
+    if (!sessionCode || !participantId) return false;
+
+    try {
+      const state = await firstValueFrom(this.participantApi.getState(sessionCode, participantId));
+      if (state) {
+        const sessionData: JoinSessionResponse = {
+          participantId: state.participantId,
+          sessionId: (state as any).sessionId || this.participant()?.sessionId || '',
+          sessionCode: state.sessionCode,
+          sessionName: state.sessionName,
+          fullName: state.fullName,
+          sessionStatus: state.sessionStatus,
+          currentQuestionNumber: state.currentQuestionNumber,
+          totalQuestions: state.totalQuestions,
+          questionDurationSeconds: (state as any).questionDurationSeconds || 15
+        };
+
+        this.setParticipantSession(sessionData);
+        this.totalScore.set(state.totalScore);
+        this.myRank.set(state.rank);
+
+        // Ensure real-time SignalR connection is active
+        await this.signalR.startConnection(state.sessionCode, state.participantId, false);
+
+        // Sync question state
+        const isQuestionVoting = state.currentQuestionStatus === QuestionStatus.Voting ||
+                                (state.currentQuestionStatus as any) === 1 ||
+                                (state.currentQuestionStatus as any) === 'Voting';
+
+        if (isQuestionVoting) {
+          this.isVotingOpen.set(true);
+          if (state.hasSubmittedAnswer) {
+            this.hasSubmitted.set(true);
+            this.selectedOption.set(state.submittedOption || null);
+            this.navigateParticipant('submitted');
+          } else {
+            this.hasSubmitted.set(false);
+            this.selectedOption.set(null);
+            if (state.votingEndsAt) {
+              const endsAt = new Date(state.votingEndsAt);
+              this.votingEndsAt.set(endsAt);
+              this.startCountdownTimer(endsAt);
+            }
+            this.navigateParticipant('voting');
+          }
+        } else if (state.sessionStatus === SessionStatus.Completed) {
+          this.navigateParticipant('result');
+        } else {
+          this.navigateParticipant('waiting');
+        }
+        return true;
+      }
+    } catch (err) {
+      console.warn('Could not sync with server state:', err);
+    }
+    return false;
   }
 
   public setParticipantSession(data: JoinSessionResponse): void {
@@ -123,7 +205,7 @@ export class QuizStateService {
       this.startCountdownTimer(endsAt);
 
       if (this.participant()) {
-        this.router.navigate(['/participant/voting']);
+        this.navigateParticipant('voting');
       }
     });
 
@@ -135,9 +217,9 @@ export class QuizStateService {
 
       if (this.participant()) {
         if (this.hasSubmitted()) {
-          this.router.navigate(['/participant/submitted']);
+          this.navigateParticipant('submitted');
         } else {
-          this.router.navigate(['/participant/waiting']);
+          this.navigateParticipant('waiting');
         }
       }
     });
@@ -167,7 +249,7 @@ export class QuizStateService {
             this.sound.playCorrect();
           }
         }
-        this.router.navigate(['/participant/result']);
+        this.navigateParticipant('result');
       }
     });
 
@@ -197,7 +279,7 @@ export class QuizStateService {
       this.myOutcome.set(null);
 
       if (this.participant()) {
-        this.router.navigate(['/participant/waiting']);
+        this.navigateParticipant('waiting');
       }
     });
 
@@ -207,7 +289,7 @@ export class QuizStateService {
       this.sessionStatus.set(SessionStatus.Completed);
       this.sound.playFastestFanfare();
       if (this.participant()) {
-        this.router.navigate(['/participant/result']);
+        this.navigateParticipant('result');
       }
     });
 

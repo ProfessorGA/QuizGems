@@ -233,7 +233,7 @@ export class ParticipantVotingComponent implements OnInit {
 
   ngOnInit(): void {
     if (this.state.hasSubmitted()) {
-      this.router.navigate(['/participant/submitted']);
+      this.state.navigateParticipant('submitted');
       return;
     }
 
@@ -273,7 +273,7 @@ export class ParticipantVotingComponent implements OnInit {
       const res = await this.signalR.submitAnswer(p.sessionCode, p.participantId, option);
       if (res.success) {
         this.state.markAnswerSubmitted(option, res.responseMilliseconds);
-        this.router.navigate(['/participant/submitted']);
+        this.state.navigateParticipant('submitted');
       } else {
         console.warn('Submission response not successful:', res.message);
         // Fallback REST call
@@ -292,7 +292,7 @@ export class ParticipantVotingComponent implements OnInit {
       next: (res) => {
         if (res.success) {
           this.state.markAnswerSubmitted(option, res.responseMilliseconds);
-          this.router.navigate(['/participant/submitted']);
+          this.state.navigateParticipant('submitted');
         }
       },
       error: (err) => {

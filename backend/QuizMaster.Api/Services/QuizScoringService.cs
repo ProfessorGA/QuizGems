@@ -261,6 +261,11 @@ public class QuizScoringService : IQuizScoringService
             csv.AppendLine($"{entry.Rank},{nameEscaped},{entry.TotalScore},{entry.CorrectAnswersCount},{wrong},{noAnswers},{entry.FastestWinsCount},{status}");
         }
 
-        return Encoding.UTF8.GetBytes(csv.ToString());
+        var preamble = Encoding.UTF8.GetPreamble();
+        var data = Encoding.UTF8.GetBytes(csv.ToString());
+        var result = new byte[preamble.Length + data.Length];
+        Buffer.BlockCopy(preamble, 0, result, 0, preamble.Length);
+        Buffer.BlockCopy(data, 0, result, preamble.Length, data.Length);
+        return result;
     }
 }

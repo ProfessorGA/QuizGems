@@ -57,17 +57,21 @@ builder.Services.AddDbContext<QuizDbContext>(options =>
 });
 
 // 2. Repositories & Services
+builder.Services.AddHttpClient();
 builder.Services.AddScoped<IQuizRepository, QuizRepository>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IQuizScoringService, QuizScoringService>();
 builder.Services.AddSingleton<IQuizSessionManager, QuizSessionManager>();
+builder.Services.AddHostedService<ServerKeepAliveService>();
 
-// 3. SignalR
+// 3. SignalR (Optimized for resilient mobile connections & long standby)
 builder.Services.AddSignalR(options =>
 {
     options.EnableDetailedErrors = true;
     options.KeepAliveInterval = TimeSpan.FromSeconds(10);
-    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
+    options.HandshakeTimeout = TimeSpan.FromSeconds(30);
+    options.MaximumReceiveMessageSize = 1024 * 1024;
 });
 
 // 4. JWT Authentication

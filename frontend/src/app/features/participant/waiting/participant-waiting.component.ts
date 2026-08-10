@@ -5,6 +5,8 @@ import { QuizStateService } from '../../../core/services/quiz-state.service';
 import { QuizSignalRService } from '../../../core/services/quiz-signalr.service';
 import { ConnectionBadgeComponent } from '../../../shared/components/connection-badge/connection-badge.component';
 
+import { ActivatedRoute } from '@angular/router';
+
 @Component({
   selector: 'app-participant-waiting',
   standalone: true,
@@ -132,16 +134,24 @@ import { ConnectionBadgeComponent } from '../../../shared/components/connection-
 export class ParticipantWaitingComponent implements OnInit {
   constructor(
     public state: QuizStateService,
-    private signalR: QuizSignalRService
+    private signalR: QuizSignalRService,
+    private route: ActivatedRoute
   ) {}
 
   async ngOnInit(): Promise<void> {
-    const p = this.state.participant();
-    if (p) {
-      try {
-        await this.signalR.startConnection(p.sessionCode, p.participantId, false);
-      } catch (err) {
-        console.error('SignalR start error in waiting:', err);
+    const code = this.route.snapshot.queryParams['code'] || this.state.sessionCode();
+    const id = this.route.snapshot.queryParams['id'] || this.state.participant()?.participantId;
+
+    if (code && id) {
+      await this.state.syncWithServerState(code, id);
+    } else {
+      const p = this.state.participant();
+      if (p) {
+        try {
+          await this.signalR.startConnection(p.sessionCode, p.participantId, false);
+        } catch (err) {
+          console.error('SignalR start error in waiting:', err);
+        }
       }
     }
   }

@@ -1,5 +1,6 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { ActivatedRoute } from '@angular/router';
 import { QuizStateService } from '../../../core/services/quiz-state.service';
 import { ConnectionBadgeComponent } from '../../../shared/components/connection-badge/connection-badge.component';
 
@@ -22,7 +23,7 @@ import { ConnectionBadgeComponent } from '../../../shared/components/connection-
         <!-- Selected Option Pill -->
         <div class="selected-pill mb-4" [ngClass]="'opt-border-' + state.selectedOption()">
           <span class="pill-label">YOUR CHOICE</span>
-          <h2 class="pill-option mb-0">OPTION {{ state.selectedOption() }}</h2>
+          <h2 class="pill-option mb-0">OPTION {{ state.selectedOption() || '-' }}</h2>
           <span *ngIf="state.submissionTimeMs()" class="pill-time">
             Response Time: {{ (state.submissionTimeMs()! / 1000).toFixed(3) }}s
           </span>
@@ -61,8 +62,8 @@ import { ConnectionBadgeComponent } from '../../../shared/components/connection-
       box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 30px rgba(16, 185, 129, 0.15);
     }
     .success-orb {
-      width: 68px;
-      height: 68px;
+      width: 72px;
+      height: 72px;
       border-radius: 50%;
       background: linear-gradient(135deg, #10b981, #059669);
       display: flex;
@@ -70,55 +71,60 @@ import { ConnectionBadgeComponent } from '../../../shared/components/connection-
       justify-content: center;
       font-size: 2.2rem;
       color: #ffffff;
-      box-shadow: 0 0 25px rgba(16, 185, 129, 0.6);
-      animation: pop-bounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      box-shadow: 0 0 30px rgba(16, 185, 129, 0.6);
+      animation: pop-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
     .selected-pill {
-      background: rgba(15, 23, 42, 0.8);
+      background: rgba(30, 41, 59, 0.7);
+      border: 2px solid rgba(99, 102, 241, 0.5);
       border-radius: 16px;
       padding: 16px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
     }
     .pill-label {
-      font-size: 0.7rem;
+      font-size: 0.75rem;
       font-weight: 700;
       letter-spacing: 0.1em;
       color: #94a3b8;
     }
     .pill-option {
-      font-size: 1.5rem;
+      font-size: 1.6rem;
       font-weight: 800;
       color: #ffffff;
-      font-family: 'Outfit', sans-serif;
     }
     .pill-time {
-      font-size: 0.75rem;
+      display: block;
+      font-size: 0.8rem;
+      color: #38bdf8;
       font-weight: 600;
-      color: #34d399;
+      margin-top: 4px;
     }
-    .opt-border-1 { border: 2px solid rgba(99, 102, 241, 0.6); }
-    .opt-border-2 { border: 2px solid rgba(16, 185, 129, 0.6); }
-    .opt-border-3 { border: 2px solid rgba(245, 158, 11, 0.6); }
-    .opt-border-4 { border: 2px solid rgba(244, 63, 94, 0.6); }
-
+    .opt-border-1 { border-color: #ef4444 !important; }
+    .opt-border-2 { border-color: #3b82f6 !important; }
+    .opt-border-3 { border-color: #eab308 !important; }
+    .opt-border-4 { border-color: #10b981 !important; }
     .waiting-box {
-      background: rgba(99, 102, 241, 0.08);
+      background: rgba(15, 23, 42, 0.6);
       border: 1px dashed rgba(99, 102, 241, 0.3);
     }
-    .text-indigo {
-      color: #a5b4fc;
-    }
-
-    @keyframes pop-bounce {
-      0% { transform: scale(0); opacity: 0; }
-      70% { transform: scale(1.15); }
+    .text-indigo { color: #818cf8; }
+    @keyframes pop-in {
+      0% { transform: scale(0.5); opacity: 0; }
       100% { transform: scale(1); opacity: 1; }
     }
   `]
 })
-export class ParticipantSubmittedComponent {
-  constructor(public state: QuizStateService) {}
+export class ParticipantSubmittedComponent implements OnInit {
+  constructor(
+    public state: QuizStateService,
+    private route: ActivatedRoute
+  ) {}
+
+  async ngOnInit(): Promise<void> {
+    const code = this.route.snapshot.queryParams['code'] || this.state.sessionCode();
+    const id = this.route.snapshot.queryParams['id'] || this.state.participant()?.participantId;
+
+    if (code && id && !this.state.selectedOption()) {
+      await this.state.syncWithServerState(code, id);
+    }
+  }
 }

@@ -4,6 +4,8 @@ import { RouterModule } from '@angular/router';
 import { QuizStateService } from '../../../core/services/quiz-state.service';
 import { ConnectionBadgeComponent } from '../../../shared/components/connection-badge/connection-badge.component';
 
+import { ActivatedRoute } from '@angular/router';
+
 @Component({
   selector: 'app-participant-result',
   standalone: true,
@@ -199,9 +201,19 @@ import { ConnectionBadgeComponent } from '../../../shared/components/connection-
   `]
 })
 export class ParticipantResultComponent implements OnInit {
-  constructor(public state: QuizStateService) {}
+  constructor(
+    public state: QuizStateService,
+    private route: ActivatedRoute
+  ) {}
 
-  ngOnInit(): void {
+  async ngOnInit(): Promise<void> {
+    const code = this.route.snapshot.queryParams['code'] || this.state.sessionCode();
+    const id = this.route.snapshot.queryParams['id'] || this.state.participant()?.participantId;
+
+    if (code && id && !this.state.totalScore()) {
+      await this.state.syncWithServerState(code, id);
+    }
+
     const outcome = this.state.myOutcome();
     if (outcome?.isFastest || outcome?.isCorrect) {
       this.triggerConfetti();
