@@ -33,6 +33,8 @@ public class AdminAuthController : ControllerBase
             return BadRequest(new { message = "Username and password are required." });
         }
 
+        try { await _repository.EnsureDatabaseCreatedAsync(); } catch { }
+
         var admin = await _repository.GetAdminByUsernameAsync(request.Username);
         
         // If admin table is empty, auto-seed default admin credentials from config

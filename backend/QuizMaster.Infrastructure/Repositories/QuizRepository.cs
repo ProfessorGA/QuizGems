@@ -203,4 +203,9 @@ public class QuizRepository : IQuizRepository
         _context.AdminUsers.Add(admin);
         await _context.SaveChangesAsync(ct);
     }
+
+    public async Task EnsureDatabaseCreatedAsync(CancellationToken ct = default)
+    {
+        await _context.Database.EnsureCreatedAsync(ct);
+    }
 }

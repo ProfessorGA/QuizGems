@@ -28,6 +28,11 @@ var isSqlite = string.Equals(dbProvider, "Sqlite", StringComparison.OrdinalIgnor
                connectionString.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase) ||
                connectionString.EndsWith(".db", StringComparison.OrdinalIgnoreCase);
 
+if (!isSqlite)
+{
+    connectionString = ParsePostgresConnectionString(connectionString);
+}
+
 builder.Services.AddDbContext<QuizDbContext>(options =>
 {
     if (isSqlite)

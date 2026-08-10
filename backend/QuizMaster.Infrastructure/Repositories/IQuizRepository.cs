@@ -38,4 +38,5 @@ public interface IQuizRepository
     // Admin
     Task<AdminUser?> GetAdminByUsernameAsync(string username, CancellationToken ct = default);
     Task CreateAdminAsync(AdminUser admin, CancellationToken ct = default);
+    Task EnsureDatabaseCreatedAsync(CancellationToken ct = default);
 }
