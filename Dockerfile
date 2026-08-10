@@ -2,14 +2,14 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-COPY ["backend/QuizMaster.slnx", "backend/"]
+# Copy project files
 COPY ["backend/QuizMaster.Core/QuizMaster.Core.csproj", "backend/QuizMaster.Core/"]
 COPY ["backend/QuizMaster.Infrastructure/QuizMaster.Infrastructure.csproj", "backend/QuizMaster.Infrastructure/"]
 COPY ["backend/QuizMaster.Api/QuizMaster.Api.csproj", "backend/QuizMaster.Api/"]
-COPY ["backend/QuizMaster.Tests/QuizMaster.Tests.csproj", "backend/QuizMaster.Tests/"]
 
 RUN dotnet restore "backend/QuizMaster.Api/QuizMaster.Api.csproj"
 
+# Copy source code and publish
 COPY backend/ backend/
 WORKDIR "/src/backend/QuizMaster.Api"
 RUN dotnet publish "QuizMaster.Api.csproj" -c Release -o /app/publish /p:UseAppHost=false
