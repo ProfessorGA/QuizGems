@@ -16,6 +16,7 @@ public interface IQuizHubClient
     Task ScoreboardUpdated(List<ScoreboardEntryDto> leaderboard);
     Task NextQuestion(NextQuestionHubDto nextQuestion);
     Task QuizCompleted(FinalScoreboardDto finalScoreboard);
+    Task SessionReset(string sessionCode);
     Task SessionDeleted(string sessionCode);
     Task ErrorNotification(string message);
 }

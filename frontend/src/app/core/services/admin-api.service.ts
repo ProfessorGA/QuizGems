@@ -87,6 +87,14 @@ export class AdminApiService {
     return this.http.get(`${this.baseUrl}/sessions/${id}/export`, { responseType: 'blob' });
   }
 
+  resetParticipants(id: string): Observable<{ message: string; session: any }> {
+    return this.http.post<{ message: string; session: any }>(`${this.baseUrl}/sessions/${id}/reset-participants`, {});
+  }
+
+  terminateSession(id: string): Observable<FinalScoreboardDto> {
+    return this.http.post<FinalScoreboardDto>(`${this.baseUrl}/sessions/${id}/terminate`, {});
+  }
+
   deleteSession(id: string): Observable<{ message: string }> {
     return this.http.delete<{ message: string }>(`${this.baseUrl}/sessions/${id}`);
   }

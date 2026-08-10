@@ -208,4 +208,31 @@ public class QuizRepository : IQuizRepository
     {
         await _context.Database.EnsureCreatedAsync(ct);
     }
+
+    public async Task ClearParticipantsAndAnswersAsync(Guid sessionId, CancellationToken ct = default)
+    {
+        var answers = await _context.Answers.Where(a => a.SessionId == sessionId).ToListAsync(ct);
+        _context.Answers.RemoveRange(answers);
+
+        var participants = await _context.Participants.Where(p => p.SessionId == sessionId).ToListAsync(ct);
+        _context.Participants.RemoveRange(participants);
+
+        var questions = await _context.Questions.Where(q => q.SessionId == sessionId).ToListAsync(ct);
+        foreach (var q in questions)
+        {
+            q.Status = QuestionStatus.Pending;
+            q.CorrectOption = null;
+            q.StartedAt = null;
+            q.VotingEndsAt = null;
+        }
+
+        var session = await _context.Sessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+        if (session != null)
+        {
+            session.Status = SessionStatus.Waiting;
+            session.CurrentQuestionNumber = 1;
+        }
+
+        await _context.SaveChangesAsync(ct);
+    }
 }

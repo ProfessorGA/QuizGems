@@ -267,6 +267,40 @@ public class AdminSessionsController : ControllerBase
         }
     }
 
+    [HttpPost("{id:guid}/reset-participants")]
+    public async Task<IActionResult> ResetParticipants(Guid id)
+    {
+        var session = await _repository.GetSessionByIdAsync(id);
+        if (session == null) return NotFound(new { message = "Session not found." });
+
+        var sessionCode = session.SessionCode;
+        await _repository.ClearParticipantsAndAnswersAsync(id);
+
+        // Notify all participant devices in this session to reset and return to join screen
+        await _hubContext.Clients.Group($"session_{sessionCode}").SessionReset(sessionCode);
+
+        var updatedSession = await _repository.GetSessionByIdAsync(id);
+        return Ok(new
+        {
+            message = $"Session '{sessionCode}' participants cleared. Fresh start ready.",
+            session = updatedSession
+        });
+    }
+
+    [HttpPost("{id:guid}/terminate")]
+    public async Task<ActionResult<FinalScoreboardDto>> TerminateSession(Guid id)
+    {
+        try
+        {
+            var final = await _sessionManager.CompleteQuizAsync(id);
+            return Ok(final);
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { message = "Session not found." });
+        }
+    }
+
     [HttpGet("{id:guid}/export")]
     public async Task<IActionResult> ExportResults(Guid id)
     {

@@ -35,8 +35,9 @@ public interface IQuizRepository
     Task<QuizAnswer> RecordAnswerAsync(QuizAnswer answer, CancellationToken ct = default);
     Task UpdateAnswersBatchAsync(IEnumerable<QuizAnswer> answers, CancellationToken ct = default);
 
-    // Admin
+    // Admin & Session Maintenance
     Task<AdminUser?> GetAdminByUsernameAsync(string username, CancellationToken ct = default);
     Task CreateAdminAsync(AdminUser admin, CancellationToken ct = default);
     Task EnsureDatabaseCreatedAsync(CancellationToken ct = default);
+    Task ClearParticipantsAndAnswersAsync(Guid sessionId, CancellationToken ct = default);
 }

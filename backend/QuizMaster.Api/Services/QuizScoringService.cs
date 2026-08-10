@@ -244,12 +244,26 @@ public class QuizScoringService : IQuizScoringService
             .GroupBy(a => a.ParticipantId)
             .ToDictionary(g => g.Key, g => g.Count());
 
+        var nowUtc = DateTime.UtcNow;
+        var istTime = nowUtc.AddHours(5).AddMinutes(30);
+
         var csv = new StringBuilder();
-        csv.AppendLine($"Physical Quiz Competition Results: {session.SessionName} ({session.SessionCode})");
-        csv.AppendLine($"Export Date: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
-        csv.AppendLine($"Total Questions: {session.TotalQuestions}, Duration: {session.QuestionDurationSeconds}s, Points: {session.CorrectAnswerPoints}, Fastest Bonus: {session.FastestAnswerBonus}");
+        csv.AppendLine($"==========================================================================================");
+        csv.AppendLine($"  PHYSICAL QUIZ ARENA - OFFICIAL COMPETITION REPORT & AUDIT TRAIL");
+        csv.AppendLine($"==========================================================================================");
+        csv.AppendLine($"Session Name: {session.SessionName}");
+        csv.AppendLine($"Session Code: {session.SessionCode}");
+        csv.AppendLine($"Export Timestamp (IST): {istTime:yyyy-MM-dd HH:mm:ss.fff} (Indian Standard Time UTC+5:30)");
+        csv.AppendLine($"Export Timestamp (UTC): {nowUtc:yyyy-MM-dd HH:mm:ss.fff} UTC");
+        csv.AppendLine($"Configuration: Total Questions: {session.TotalQuestions} | Duration: {session.QuestionDurationSeconds}s | Base Points: {session.CorrectAnswerPoints} | Fastest Bonus: {session.FastestAnswerBonus}");
+        csv.AppendLine($"Total Registered Contestants: {leaderboard.Count} | Total Answers Locked: {answers.Count}");
         csv.AppendLine();
-        csv.AppendLine("Rank,Participant Name,Total Score,Correct Answers,Wrong Answers,No Answers,Fastest Wins,Connection Status");
+
+        // Section 1: Official Final Standings
+        csv.AppendLine($"------------------------------------------------------------------------------------------");
+        csv.AppendLine($"  SECTION 1: OFFICIAL FINAL STANDINGS");
+        csv.AppendLine($"------------------------------------------------------------------------------------------");
+        csv.AppendLine("Rank,Participant Name,Total Points,Correct Answers,Wrong Answers,No Answers,Fastest Finger Wins,Final Status");
 
         foreach (var entry in leaderboard)
         {
@@ -259,6 +273,25 @@ public class QuizScoringService : IQuizScoringService
             var nameEscaped = $"\"{entry.FullName.Replace("\"", "\"\"")}\"";
 
             csv.AppendLine($"{entry.Rank},{nameEscaped},{entry.TotalScore},{entry.CorrectAnswersCount},{wrong},{noAnswers},{entry.FastestWinsCount},{status}");
+        }
+
+        csv.AppendLine();
+
+        // Section 2: Question-by-Question Auditable Proof Log
+        csv.AppendLine($"------------------------------------------------------------------------------------------");
+        csv.AppendLine($"  SECTION 2: VERIFIABLE QUESTION-BY-QUESTION SUBMISSION LOG (PROOF & AUDIT)");
+        csv.AppendLine($"------------------------------------------------------------------------------------------");
+        csv.AppendLine("Question #,Participant Name,Selected Option,Result,Points Awarded,Response Time (s),Response Time (ms),Fastest Awarded,Server Received (IST Timestamp),Server Received (UTC Timestamp)");
+
+        foreach (var a in answers.OrderBy(x => x.Question.QuestionNumber).ThenBy(x => x.ResponseMilliseconds))
+        {
+            var pName = $"\"{a.Participant?.FullName.Replace("\"", "\"\"") ?? "Contestant"}\"";
+            var resultStr = a.IsCorrect == true ? "CORRECT" : (a.IsCorrect == false ? "INCORRECT" : "PENDING");
+            var responseSec = (a.ResponseMilliseconds / 1000.0).ToString("F3");
+            var isFastestStr = a.IsFastest ? "YES (FASTEST +5)" : "NO";
+            var aIst = a.ServerReceivedAt.AddHours(5).AddMinutes(30);
+
+            csv.AppendLine($"{a.Question.QuestionNumber},{pName},Option {a.SelectedOption},{resultStr},{a.PointsAwarded},{responseSec},{a.ResponseMilliseconds:F1},{isFastestStr},{aIst:yyyy-MM-dd HH:mm:ss.fff} IST,{a.ServerReceivedAt:yyyy-MM-dd HH:mm:ss.fff} UTC");
         }
 
         var preamble = Encoding.UTF8.GetPreamble();

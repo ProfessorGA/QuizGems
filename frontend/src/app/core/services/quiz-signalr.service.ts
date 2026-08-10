@@ -40,6 +40,7 @@ export class QuizSignalRService {
   public scoreboardUpdated$ = new Subject<ScoreboardEntryDto[]>();
   public nextQuestion$ = new Subject<NextQuestionHubDto>();
   public quizCompleted$ = new Subject<FinalScoreboardDto>();
+  public sessionReset$ = new Subject<string>();
   public sessionDeleted$ = new Subject<string>();
 
   public async startConnection(sessionCode: string, participantId?: string, isAdmin: boolean = false): Promise<void> {
@@ -109,6 +110,7 @@ export class QuizSignalRService {
     this.hubConnection.on('ScoreboardUpdated', (dto: ScoreboardEntryDto[]) => this.scoreboardUpdated$.next(dto));
     this.hubConnection.on('NextQuestion', (dto: NextQuestionHubDto) => this.nextQuestion$.next(dto));
     this.hubConnection.on('QuizCompleted', (dto: FinalScoreboardDto) => this.quizCompleted$.next(dto));
+    this.hubConnection.on('SessionReset', (sessionCode: string) => this.sessionReset$.next(sessionCode));
     this.hubConnection.on('SessionDeleted', (sessionCode: string) => this.sessionDeleted$.next(sessionCode));
   }
 

@@ -74,6 +74,25 @@ import {
               <i class="bi" [ngClass]="sound.isMuted() ? 'bi-volume-mute-fill text-danger' : 'bi-volume-up-fill text-success'"></i>
             </button>
 
+            <button 
+              class="btn btn-outline-warning btn-sm px-3 py-2 rounded-3 fw-bold" 
+              (click)="onResetParticipants()"
+              [disabled]="isActionLoading()"
+              title="Clear participants and answers for a clean fresh start"
+            >
+              <i class="bi bi-arrow-counterclockwise me-1"></i>Reset Players
+            </button>
+
+            <button 
+              *ngIf="session()?.status !== 'Completed'"
+              class="btn btn-outline-danger btn-sm px-3 py-2 rounded-3 fw-bold" 
+              (click)="onTerminateSession()"
+              [disabled]="isActionLoading()"
+              title="End tournament and kick all players to final podium while preserving export log"
+            >
+              <i class="bi bi-stop-circle-fill me-1"></i>End Session
+            </button>
+
             <button class="btn btn-outline-danger btn-sm px-3 py-2 rounded-3 fw-bold" (click)="confirmDeleteSession()">
               <i class="bi bi-trash3-fill me-1"></i>Delete
             </button>
@@ -905,6 +924,54 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.isActionLoading.set(false);
         alert(err.error?.message || 'Failed to complete quiz.');
+      }
+    });
+  }
+
+  public onResetParticipants(): void {
+    if (!confirm('Are you sure you want to reset all contestants? This will clear participants and answers for this session, allowing a clean fresh start.')) {
+      return;
+    }
+    this.isActionLoading.set(true);
+    this.adminApi.resetParticipants(this.sessionId).subscribe({
+      next: (res) => {
+        this.isActionLoading.set(false);
+        this.participants.set([]);
+        this.scoreboard.set([]);
+        this.currentQuestionResult.set(null);
+        this.answeredCount.set(0);
+        this.selectedCorrectOption.set(null);
+        const s = this.session();
+        if (s) {
+          this.session.set({ ...s, status: SessionStatus.Waiting, currentQuestionNumber: 1 });
+        }
+        alert(res.message || 'Session contestants cleared. Fresh start ready.');
+      },
+      error: (err) => {
+        this.isActionLoading.set(false);
+        alert(err.error?.message || 'Failed to reset contestants.');
+      }
+    });
+  }
+
+  public onTerminateSession(): void {
+    if (!confirm('Are you sure you want to end & terminate this live session? All connected contestant devices will transition to their final celebration podium. Complete audit logs and CSV export will be preserved.')) {
+      return;
+    }
+    this.isActionLoading.set(true);
+    this.adminApi.terminateSession(this.sessionId).subscribe({
+      next: (final) => {
+        this.isActionLoading.set(false);
+        this.finalScoreboard.set(final);
+        const s = this.session();
+        if (s) {
+          this.session.set({ ...s, status: SessionStatus.Completed });
+        }
+        this.sound.playFastestFanfare();
+      },
+      error: (err) => {
+        this.isActionLoading.set(false);
+        alert(err.error?.message || 'Failed to terminate session.');
       }
     });
   }

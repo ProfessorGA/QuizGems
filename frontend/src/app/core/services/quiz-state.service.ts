@@ -344,6 +344,13 @@ export class QuizStateService {
       );
     });
 
+    this.signalR.sessionReset$.subscribe(() => {
+      if (!this.router.url.startsWith('/admin')) {
+        this.clearParticipantSession();
+        this.router.navigate(['/join'], { queryParams: { reset: true } });
+      }
+    });
+
     this.signalR.sessionDeleted$.subscribe(() => {
       if (!this.router.url.startsWith('/admin')) {
         this.clearParticipantSession();
