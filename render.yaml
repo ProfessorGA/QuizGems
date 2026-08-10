@@ -1,5 +1,5 @@
 services:
-  # 1. Backend Web API & SignalR Service (.NET 8)
+  # Backend Web API & Real-Time SignalR WebSockets (.NET 8)
   - type: web
     name: quizmaster-api
     runtime: dotnet
@@ -21,24 +21,9 @@ services:
       - key: Admin__DefaultPassword
         value: Admin@Quiz2026
       - key: ALLOWED_ORIGINS
-        value: https://*.onrender.com,https://*.vercel.app,http://localhost:4200
+        value: https://*.vercel.app,http://localhost:4200
 
-  # 2. Frontend Angular Single Page Application (Render Static Site - 0MB RAM, Free CDN)
-  - type: staticSite
-    name: quizmaster-frontend
-    plan: free
-    region: oregon
-    buildCommand: cd frontend && npm install && npm run build
-    publishPath: frontend/dist/frontend
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: NODE_VERSION
-        value: 20.9.0
-
-# 3. Managed PostgreSQL Database
+# Managed PostgreSQL Database
 databases:
   - name: quizmaster-postgres
     databaseName: quizmaster
