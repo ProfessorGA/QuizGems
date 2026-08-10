@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+dist/
+.angular/
+out/
+build/
+bin/
+obj/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+quizmaster.db
+
+# IDE & OS
+.vs/
+.vscode/
+.idea/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+.DS_Store
+Thumbs.db
+
+# Temporary tools
+tools/
+scratch/
+*.tgz

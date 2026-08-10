@@ -1,0 +1,32 @@
+services:
+  # 1. Backend Web API & SignalR Service (.NET 8)
+  - type: web
+    name: quizmaster-api
+    runtime: dotnet
+    plan: free
+    region: oregon
+    buildCommand: dotnet publish backend/QuizMaster.Api/QuizMaster.Api.csproj -c Release -o out
+    startCommand: dotnet out/QuizMaster.Api.dll
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: DATABASE_CONNECTION_STRING
+        fromDatabase:
+          name: quizmaster-postgres
+          property: connectionString
+      - key: Jwt__Secret
+        generateValue: true
+      - key: Admin__DefaultUsername
+        value: admin
+      - key: Admin__DefaultPassword
+        value: Admin@Quiz2026
+      - key: ALLOWED_ORIGINS
+        value: https://*.vercel.app,http://localhost:4200
+
+# 2. Managed PostgreSQL Database
+databases:
+  - name: quizmaster-postgres
+    databaseName: quizmaster
+    user: quizmaster_admin
+    plan: free
+    region: oregon
