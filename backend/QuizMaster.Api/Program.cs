@@ -21,8 +21,12 @@ if (!string.IsNullOrEmpty(port))
 // 1. Database Configuration (Flexible: PostgreSQL on Render / SQLite for zero-config local dev)
 var dbProvider = Environment.GetEnvironmentVariable("DATABASE_PROVIDER") ?? builder.Configuration["DatabaseProvider"];
 var connectionString = Environment.GetEnvironmentVariable("DATABASE_CONNECTION_STRING")
+    ?? Environment.GetEnvironmentVariable("DATABASE_URL")
+    ?? Environment.GetEnvironmentVariable("POSTGRES_URL")
     ?? builder.Configuration.GetConnectionString("DefaultConnection")
     ?? "Data Source=quizmaster.db";
+
+connectionString = connectionString.Trim().Trim('"', '\'');
 
 var isSqlite = string.Equals(dbProvider, "Sqlite", StringComparison.OrdinalIgnoreCase) ||
                connectionString.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase) ||
@@ -124,20 +128,10 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("CorsPolicy", policy =>
     {
-        policy.SetIsOriginAllowed(origin =>
-        {
-            // Allow localhost, vercel deployments, and configured origins
-            if (origin.StartsWith("http://localhost:") || 
-                origin.EndsWith(".vercel.app") || 
-                originList.Contains(origin))
-            {
-                return true;
-            }
-            return false;
-        })
-        .AllowAnyHeader()
-        .AllowAnyMethod()
-        .AllowCredentials();
+        policy.SetIsOriginAllowed(_ => true)
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
