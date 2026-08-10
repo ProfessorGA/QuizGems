@@ -192,3 +192,42 @@ app.MapHub<QuizHub>("/hubs/quiz");
 app.MapGet("/", () => Results.Ok(new { message = "Quiz Master Real-Time Physical Quiz Platform API is running.", version = "1.0.0", health = "/health" }));
 
 app.Run();
+
+static string ParsePostgresConnectionString(string raw)
+{
+    if (string.IsNullOrWhiteSpace(raw)) return raw;
+
+    if (raw.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
+        raw.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+    {
+        try
+        {
+            var uri = new Uri(raw);
+            var userInfo = uri.UserInfo.Split(':');
+            var username = userInfo.Length > 0 ? Uri.UnescapeDataString(userInfo[0]) : "";
+            var password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : "";
+            var host = uri.Host;
+            var port = uri.Port > 0 ? uri.Port : 5432;
+            var database = uri.AbsolutePath.TrimStart('/');
+
+            var builder = new Npgsql.NpgsqlConnectionStringBuilder
+            {
+                Host = host,
+                Port = port,
+                Database = database,
+                Username = username,
+                Password = password,
+                SslMode = Npgsql.SslMode.Prefer,
+                TrustServerCertificate = true
+            };
+            return builder.ConnectionString;
+        }
+        catch
+        {
+            return raw;
+        }
+    }
+
+    return raw;
+}
+
