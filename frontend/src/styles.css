@@ -1,19 +1,25 @@
 @import 'bootstrap/dist/css/bootstrap.min.css';
 @import 'bootstrap-icons/font/bootstrap-icons.css';
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
   
-  --bg-primary: #0b0f19;
-  --bg-surface: #111827;
+  --bg-primary: #070913;
+  --bg-surface: #0f172a;
   --bg-surface-elevated: #1e293b;
   
+  --primary-400: #818cf8;
   --primary-500: #6366f1;
   --primary-600: #4f46e5;
+  --emerald-400: #34d399;
   --emerald-500: #10b981;
+  --amber-400: #fbbf24;
   --amber-500: #f59e0b;
+  --rose-400: #fb7185;
   --rose-500: #f43f5e;
+  --cyan-400: #38bdf8;
 }
 
 *, *::before, *::after {
@@ -25,10 +31,16 @@ body {
   padding: 0;
   font-family: var(--font-sans);
   background-color: var(--bg-primary);
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(236, 72, 153, 0.12) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
+  background-attachment: fixed;
   color: #f8fafc;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  min-height: 100vh;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -52,21 +64,73 @@ h1, h2, h3, h4, h5, h6 {
   background: rgba(255, 255, 255, 0.25);
 }
 
-/* Animations */
+/* Modern Glassmorphic Container */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Animated Gradient Text */
+.gradient-text-hero {
+  background: linear-gradient(135deg, #a5b4fc 0%, #c084fc 50%, #38bdf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-size: 200% auto;
+  animation: shineGradient 6s linear infinite;
+}
+
+@keyframes shineGradient {
+  to { background-position: 200% center; }
+}
+
+/* Glowing Neon Pill */
+.neon-pill {
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.neon-pill:hover {
+  box-shadow: 0 0 25px rgba(99, 102, 241, 0.7);
+  transform: translateY(-1px);
+}
+
+/* Dynamic Interactive Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes pulseLive {
   0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(0.95); }
+  50% { opacity: 0.5; transform: scale(0.92); }
 }
 
 .animate-pulse {
   animation: pulseLive 1.5s infinite ease-in-out;
+}
+
+@keyframes urgentVignette {
+  0%, 100% { box-shadow: inset 0 0 0px rgba(239, 68, 68, 0); }
+  50% { box-shadow: inset 0 0 40px rgba(239, 68, 68, 0.35); }
+}
+
+.screen-urgent-pulse {
+  animation: urgentVignette 0.8s infinite ease-in-out;
+}
+
+/* Trophy & Medal Shimmer */
+@keyframes trophyShimmer {
+  0% { transform: scale(1) rotate(0deg); filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.6)); }
+  50% { transform: scale(1.05) rotate(2deg); filter: drop-shadow(0 0 25px rgba(251, 191, 36, 0.9)); }
+  100% { transform: scale(1) rotate(0deg); filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.6)); }
+}
+
+.trophy-animated {
+  animation: trophyShimmer 2.5s infinite ease-in-out;
 }

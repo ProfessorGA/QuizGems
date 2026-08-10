@@ -12,7 +12,10 @@ import { ConnectionBadgeComponent } from '../../../shared/components/connection-
   standalone: true,
   imports: [CommonModule, TimerDisplayComponent, ConnectionBadgeComponent],
   template: `
-    <div class="voting-wrapper d-flex flex-column justify-content-between min-vh-100 px-3 py-3 py-sm-4">
+    <div 
+      class="voting-wrapper d-flex flex-column justify-content-between min-vh-100 px-3 py-3 py-sm-4"
+      [class.screen-urgent-pulse]="state.remainingSeconds() <= 5 && state.remainingSeconds() > 0"
+    >
       
       <!-- Top Bar: Question # and Connection -->
       <div class="d-flex align-items-center justify-content-between w-100 max-container mx-auto">
@@ -25,7 +28,7 @@ import { ConnectionBadgeComponent } from '../../../shared/components/connection-
         </div>
       </div>
 
-      <!-- Center: 15-Second Radial Timer -->
+      <!-- Center: Radial Countdown Timer -->
       <div class="timer-section my-auto py-2 text-center">
         <app-timer-display 
           [remainingSeconds]="state.remainingSeconds()" 
@@ -69,12 +72,13 @@ import { ConnectionBadgeComponent } from '../../../shared/components/connection-
   `,
   styles: [`
     .voting-wrapper {
-      background: radial-gradient(circle at 50% 20%, rgba(99, 102, 241, 0.15), transparent 60%),
-                  radial-gradient(circle at 50% 80%, rgba(139, 92, 246, 0.1), transparent 60%),
-                  #0b0f19;
+      background: radial-gradient(circle at 50% 20%, rgba(99, 102, 241, 0.18), transparent 60%),
+                  radial-gradient(circle at 50% 80%, rgba(139, 92, 246, 0.12), transparent 60%),
+                  #070913;
       user-select: none;
       -webkit-user-select: none;
       touch-action: manipulation;
+      transition: box-shadow 0.3s ease;
     }
     .max-container {
       max-width: 480px;
@@ -96,11 +100,11 @@ import { ConnectionBadgeComponent } from '../../../shared/components/connection-
       color: #818cf8;
     }
 
-    /* Tactile High-Contrast Option Buttons */
+    /* Tactile High-Contrast Neon Option Buttons */
     .btn-option {
       position: relative;
-      height: 110px;
-      border-radius: 20px;
+      height: 112px;
+      border-radius: 22px;
       border: 2px solid transparent;
       display: flex;
       flex-direction: column;
@@ -109,11 +113,14 @@ import { ConnectionBadgeComponent } from '../../../shared/components/connection-
       gap: 8px;
       padding: 12px;
       cursor: pointer;
-      transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    }
+    .btn-option:hover:not(:disabled) {
+      transform: translateY(-3px) scale(1.02);
     }
     .btn-option:active:not(:disabled) {
-      transform: scale(0.96);
+      transform: scale(0.95);
     }
     .btn-option:disabled {
       cursor: not-allowed;
@@ -121,14 +128,14 @@ import { ConnectionBadgeComponent } from '../../../shared/components/connection-
     }
 
     .opt-badge {
-      width: 32px;
-      height: 32px;
+      width: 34px;
+      height: 34px;
       border-radius: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 900;
-      font-size: 1.1rem;
+      font-size: 1.15rem;
       font-family: 'Outfit', sans-serif;
     }
     .opt-label {
@@ -137,6 +144,66 @@ import { ConnectionBadgeComponent } from '../../../shared/components/connection-
       letter-spacing: 0.06em;
       text-transform: uppercase;
       font-family: 'Outfit', sans-serif;
+    }
+
+    /* Option 1: Crimson Red */
+    .option-1 {
+      background: linear-gradient(145deg, #1e1014, #2a111a);
+      border-color: rgba(244, 63, 94, 0.4);
+      color: #fda4af;
+    }
+    .option-1:hover:not(:disabled) {
+      border-color: #f43f5e;
+      box-shadow: 0 0 25px rgba(244, 63, 94, 0.5);
+    }
+    .option-1 .opt-badge { background: #f43f5e; color: #fff; box-shadow: 0 0 12px rgba(244, 63, 94, 0.6); }
+
+    /* Option 2: Electric Cyan / Indigo */
+    .option-2 {
+      background: linear-gradient(145deg, #0e1726, #132238);
+      border-color: rgba(56, 189, 248, 0.4);
+      color: #7dd3fc;
+    }
+    .option-2:hover:not(:disabled) {
+      border-color: #38bdf8;
+      box-shadow: 0 0 25px rgba(56, 189, 248, 0.5);
+    }
+    .option-2 .opt-badge { background: #38bdf8; color: #04101e; box-shadow: 0 0 12px rgba(56, 189, 248, 0.6); }
+
+    /* Option 3: Amber Gold */
+    .option-3 {
+      background: linear-gradient(145deg, #1f1a0d, #2d2410);
+      border-color: rgba(245, 158, 11, 0.4);
+      color: #fde68a;
+    }
+    .option-3:hover:not(:disabled) {
+      border-color: #f59e0b;
+      box-shadow: 0 0 25px rgba(245, 158, 11, 0.5);
+    }
+    .option-3 .opt-badge { background: #f59e0b; color: #221200; box-shadow: 0 0 12px rgba(245, 158, 11, 0.6); }
+
+    /* Option 4: Emerald Green */
+    .option-4 {
+      background: linear-gradient(145deg, #0d1e17, #102d20);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #6ee7b7;
+    }
+    .option-4:hover:not(:disabled) {
+      border-color: #10b981;
+      box-shadow: 0 0 25px rgba(16, 185, 129, 0.5);
+    }
+    .option-4 .opt-badge { background: #10b981; color: #fff; box-shadow: 0 0 12px rgba(16, 185, 129, 0.6); }
+
+    .btn-option.selected {
+      border-width: 3px;
+      transform: scale(0.98);
+      filter: brightness(1.2);
+    }
+    .opt-check {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      font-size: 1.2rem;
     }
     .opt-check {
       position: absolute;

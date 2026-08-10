@@ -688,8 +688,8 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         this.loadScoreboard();
 
         // If voting is active, restore countdown
-        if (s.status === SessionStatus.Voting && s.activeQuestionVotingEndsAt) {
-          this.startCountdownTimer(new Date(s.activeQuestionVotingEndsAt));
+        if (s.status === SessionStatus.Voting) {
+          this.startCountdownTimer(s.questionDurationSeconds || 15);
         }
       },
       error: (err) => {
@@ -749,8 +749,8 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
       this.answeredCount.set(0);
       this.selectedCorrectOption.set(null);
       this.currentQuestionResult.set(null);
-      const endsAt = new Date(dto.votingEndsAtUtc);
-      this.startCountdownTimer(endsAt);
+      const duration = dto.durationSeconds || this.session()?.questionDurationSeconds || 15;
+      this.startCountdownTimer(duration);
     });
 
     this.signalR.votingEnded$.subscribe(dto => {
@@ -805,24 +805,30 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
     });
   }
 
-  private startCountdownTimer(endsAt: Date): void {
+  private startCountdownTimer(durationSeconds: number): void {
     this.stopCountdownTimer();
+    const duration = durationSeconds > 0 ? durationSeconds : 15;
+    this.remainingSeconds.set(duration);
+
+    const startLocalMs = performance.now();
+    const targetMs = duration * 1000;
+
     const update = () => {
-      const now = new Date().getTime();
-      const diffMs = endsAt.getTime() - now;
-      const seconds = Math.max(0, Math.ceil(diffMs / 1000));
+      const elapsedMs = performance.now() - startLocalMs;
+      const remainingMs = Math.max(0, targetMs - elapsedMs);
+      const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
       this.remainingSeconds.set(seconds);
 
       if (seconds <= 5 && seconds > 0) {
         this.sound.playTick();
       }
 
-      if (diffMs <= 0) {
+      if (remainingMs <= 0) {
         this.stopCountdownTimer();
       }
     };
     update();
-    this.timerInterval = setInterval(update, 250);
+    this.timerInterval = setInterval(update, 100);
   }
 
   private stopCountdownTimer(): void {

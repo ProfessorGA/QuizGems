@@ -32,12 +32,19 @@ import { ActivatedRoute } from '@angular/router';
           <span class="fw-bold text-light">{{ state.sessionCode() }}</span>
         </div>
 
-        <!-- Radar Pulse Animation -->
+        <!-- Radar Pulse Animation & Dynamic Sound Equalizer -->
         <div class="pulse-container my-4">
           <div class="radar-pulse"></div>
           <div class="radar-pulse-2"></div>
           <div class="center-mic">
             <i class="bi bi-mic-fill"></i>
+          </div>
+          <div class="sound-wave-bars">
+            <span class="bar bar-1"></span>
+            <span class="bar bar-2"></span>
+            <span class="bar bar-3"></span>
+            <span class="bar bar-4"></span>
+            <span class="bar bar-5"></span>
           </div>
         </div>
 
@@ -120,6 +127,31 @@ import { ActivatedRoute } from '@angular/router';
       color: #ffffff;
       box-shadow: 0 0 20px rgba(99, 102, 241, 0.6);
       z-index: 2;
+    }
+    .sound-wave-bars {
+      position: absolute;
+      bottom: -15px;
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      justify-content: center;
+      height: 20px;
+    }
+    .bar {
+      width: 3px;
+      background: #818cf8;
+      border-radius: 3px;
+      animation: soundWave 1.2s infinite ease-in-out alternate;
+    }
+    .bar-1 { height: 6px; animation-delay: 0.1s; }
+    .bar-2 { height: 16px; animation-delay: 0.3s; }
+    .bar-3 { height: 22px; animation-delay: 0s; }
+    .bar-4 { height: 14px; animation-delay: 0.4s; }
+    .bar-5 { height: 8px; animation-delay: 0.2s; }
+
+    @keyframes soundWave {
+      0% { transform: scaleY(0.4); opacity: 0.5; }
+      100% { transform: scaleY(1.3); opacity: 1; filter: drop-shadow(0 0 6px #818cf8); }
     }
     @keyframes radar-expand {
       0% { transform: scale(0.6); opacity: 1; }

@@ -1,4 +1,4 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import {
@@ -73,6 +73,10 @@ export class QuizStateService {
   }
 
   public navigateParticipant(path: string): void {
+    // CRITICAL: NEVER navigate away if the current tab is an Admin page!
+    if (this.router.url.startsWith('/admin')) {
+      return;
+    }
     const qp = this.getQueryParams();
     if (qp.code && qp.id) {
       this.router.navigate([`/participant/${path}`], { queryParams: qp });
@@ -82,9 +86,13 @@ export class QuizStateService {
   }
 
   private restoreSessionFromStorage(): void {
-    const saved = localStorage.getItem('qm_participant');
-    if (saved) {
-      try {
+    // If currently on admin route, do NOT load participant into state
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')) {
+      return;
+    }
+    try {
+      const saved = sessionStorage.getItem('qm_participant') || localStorage.getItem('qm_participant');
+      if (saved) {
         const parsed = JSON.parse(saved) as JoinSessionResponse;
         this.participant.set(parsed);
         this.sessionCode.set(parsed.sessionCode);
@@ -92,11 +100,16 @@ export class QuizStateService {
         this.currentQuestionNumber.set(parsed.currentQuestionNumber || 1);
         this.totalQuestions.set(parsed.totalQuestions || 25);
         this.durationSeconds.set(parsed.questionDurationSeconds || 15);
-      } catch {}
-    }
+      }
+    } catch {}
   }
 
   public async syncWithServerState(code?: string, id?: string): Promise<boolean> {
+    // Do not sync participant state into Admin dashboards
+    if (this.router.url.startsWith('/admin')) {
+      return false;
+    }
+
     const sessionCode = (code || this.sessionCode()).trim().toUpperCase();
     const participantId = id || this.participant()?.participantId;
 
@@ -131,6 +144,8 @@ export class QuizStateService {
 
         if (isQuestionVoting) {
           this.isVotingOpen.set(true);
+          this.durationSeconds.set(state.durationSeconds || 15);
+
           if (state.hasSubmittedAnswer) {
             this.hasSubmitted.set(true);
             this.selectedOption.set(state.submittedOption || null);
@@ -138,11 +153,7 @@ export class QuizStateService {
           } else {
             this.hasSubmitted.set(false);
             this.selectedOption.set(null);
-            if (state.votingEndsAt) {
-              const endsAt = new Date(state.votingEndsAt);
-              this.votingEndsAt.set(endsAt);
-              this.startCountdownTimer(endsAt);
-            }
+            this.startCountdownTimer(state.durationSeconds || 15);
             this.navigateParticipant('voting');
           }
         } else if (state.sessionStatus === SessionStatus.Completed) {
@@ -165,7 +176,11 @@ export class QuizStateService {
     this.currentQuestionNumber.set(data.currentQuestionNumber || 1);
     this.totalQuestions.set(data.totalQuestions || 25);
     this.durationSeconds.set(data.questionDurationSeconds || 15);
-    localStorage.setItem('qm_participant', JSON.stringify(data));
+
+    try {
+      sessionStorage.setItem('qm_participant', JSON.stringify(data));
+      localStorage.setItem('qm_participant', JSON.stringify(data));
+    } catch {}
   }
 
   public clearParticipantSession(): void {
@@ -174,7 +189,10 @@ export class QuizStateService {
     this.participantName.set('');
     this.hasSubmitted.set(false);
     this.selectedOption.set(null);
-    localStorage.removeItem('qm_participant');
+    try {
+      sessionStorage.removeItem('qm_participant');
+      localStorage.removeItem('qm_participant');
+    } catch {}
     this.signalR.stopConnection();
   }
 
@@ -191,7 +209,8 @@ export class QuizStateService {
     this.signalR.votingStarted$.subscribe(dto => {
       this.currentQuestionNumber.set(dto.questionNumber);
       this.totalQuestions.set(dto.totalQuestions);
-      this.durationSeconds.set(dto.durationSeconds);
+      const duration = dto.durationSeconds || 15;
+      this.durationSeconds.set(duration);
       this.isVotingOpen.set(true);
       this.hasSubmitted.set(false);
       this.selectedOption.set(null);
@@ -200,11 +219,9 @@ export class QuizStateService {
       this.latestResult.set(null);
       this.myOutcome.set(null);
 
-      const endsAt = new Date(dto.votingEndsAtUtc);
-      this.votingEndsAt.set(endsAt);
-      this.startCountdownTimer(endsAt);
+      this.startCountdownTimer(duration);
 
-      if (this.participant()) {
+      if (this.participant() && !this.router.url.startsWith('/admin')) {
         this.navigateParticipant('voting');
       }
     });
@@ -215,7 +232,7 @@ export class QuizStateService {
       this.stopCountdownTimer();
       this.sound.playTimeUp();
 
-      if (this.participant()) {
+      if (this.participant() && !this.router.url.startsWith('/admin')) {
         if (this.hasSubmitted()) {
           this.navigateParticipant('submitted');
         } else {
@@ -234,7 +251,7 @@ export class QuizStateService {
       this.latestResult.set(dto);
 
       const myId = this.participant()?.participantId;
-      if (myId) {
+      if (myId && !this.router.url.startsWith('/admin')) {
         const myOutcomeItem = dto.outcomes.find(o => o.participantId === myId);
         if (myOutcomeItem) {
           this.myOutcome.set({
@@ -278,7 +295,7 @@ export class QuizStateService {
       this.latestResult.set(null);
       this.myOutcome.set(null);
 
-      if (this.participant()) {
+      if (this.participant() && !this.router.url.startsWith('/admin')) {
         this.navigateParticipant('waiting');
       }
     });
@@ -288,7 +305,7 @@ export class QuizStateService {
       this.finalScoreboard.set(dto);
       this.sessionStatus.set(SessionStatus.Completed);
       this.sound.playFastestFanfare();
-      if (this.participant()) {
+      if (this.participant() && !this.router.url.startsWith('/admin')) {
         this.navigateParticipant('result');
       }
     });
@@ -328,33 +345,41 @@ export class QuizStateService {
     });
 
     this.signalR.sessionDeleted$.subscribe(() => {
-      this.clearParticipantSession();
-      this.router.navigate(['/join'], { queryParams: { deleted: true } });
+      if (!this.router.url.startsWith('/admin')) {
+        this.clearParticipantSession();
+        this.router.navigate(['/join'], { queryParams: { deleted: true } });
+      }
     });
   }
 
-  private startCountdownTimer(endsAt: Date): void {
+  public startCountdownTimer(durationSeconds: number): void {
     this.stopCountdownTimer();
+    const duration = durationSeconds > 0 ? durationSeconds : 15;
+    this.remainingSeconds.set(duration);
+
+    const startLocalMs = performance.now();
+    const targetMs = duration * 1000;
+
     const update = () => {
-      const now = new Date().getTime();
-      const diffMs = endsAt.getTime() - now;
-      const seconds = Math.max(0, Math.ceil(diffMs / 1000));
+      const elapsedMs = performance.now() - startLocalMs;
+      const remainingMs = Math.max(0, targetMs - elapsedMs);
+      const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
       this.remainingSeconds.set(seconds);
 
       if (seconds <= 5 && seconds > 0) {
         this.sound.playTick();
       }
 
-      if (diffMs <= 0) {
+      if (remainingMs <= 0) {
         this.stopCountdownTimer();
       }
     };
 
     update();
-    this.timerInterval = setInterval(update, 250);
+    this.timerInterval = setInterval(update, 100);
   }
 
-  private stopCountdownTimer(): void {
+  public stopCountdownTimer(): void {
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
       this.timerInterval = null;
