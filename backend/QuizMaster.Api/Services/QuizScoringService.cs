@@ -74,7 +74,7 @@ public class QuizScoringService : IQuizScoringService
                 fastestDto = new FastestParticipantDto
                 {
                     ParticipantId = correct.ParticipantId,
-                    FullName = correct.Participant.FullName,
+                    FullName = participants.FirstOrDefault(p => p.Id == correct.ParticipantId)?.FullName ?? correct.Participant?.FullName ?? string.Empty,
                     ResponseMilliseconds = correct.ResponseMilliseconds,
                     BonusPoints = session.FastestAnswerBonus
                 };

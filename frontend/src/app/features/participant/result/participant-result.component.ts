@@ -26,33 +26,49 @@ import { ConnectionBadgeComponent } from '../../../shared/components/connection-
           <h2 class="correct-option-text mb-0">OPTION {{ state.revealedCorrectOption() || state.latestResult()?.correctOption }}</h2>
         </div>
 
-        <!-- Participant Score Card -->
+        <!-- Participant Score Card (Live Personal Score & Rank) -->
         <div class="score-summary-grid row g-2 mb-4">
           
-          <div class="col-6">
+          <div class="col-4">
             <div class="score-card p-3 rounded-3">
               <span class="score-label">POINTS EARNED</span>
               <div class="score-value text-success">+{{ state.myOutcome()?.pointsEarned || 0 }}</div>
             </div>
           </div>
 
-          <div class="col-6">
+          <div class="col-4">
             <div class="score-card p-3 rounded-3">
-              <span class="score-label">TOTAL SCORE</span>
+              <span class="score-label">MY TOTAL SCORE</span>
               <div class="score-value text-indigo">{{ state.totalScore() }}</div>
             </div>
           </div>
 
+          <div class="col-4">
+            <div class="score-card p-3 rounded-3">
+              <span class="score-label">CURRENT RANK</span>
+              <div class="score-value text-warning">#{{ state.myRank() || '-' }}</div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Final Quiz Completed Banner -->
+        <div *ngIf="state.sessionStatus() === 'Completed'" class="completed-hero-box p-3 rounded-4 mb-4 text-center">
+          <span class="d-block fs-1 mb-1">🎉</span>
+          <h3 class="h5 fw-bold text-white mb-1">QUIZ COMPLETED!</h3>
+          <p class="small text-secondary mb-0">
+            You finished at <strong class="text-warning">Rank #{{ state.myRank() || 1 }}</strong> with <strong class="text-indigo">{{ state.totalScore() }} points</strong>!
+          </p>
         </div>
 
         <!-- Fastest Participant Spotlight if won by someone else -->
         <div *ngIf="state.latestResult()?.fastestParticipant as fastest" class="fastest-box p-3 rounded-3 mb-4 text-start">
           <div class="d-flex align-items-center justify-content-between">
             <div class="d-flex align-items-center gap-2">
-              <span class="trophy-icon">🏆</span>
+              <span class="trophy-icon">⚡</span>
               <div>
                 <span class="fastest-title d-block">Fastest Contestant</span>
-                <strong class="fastest-name">{{ fastest.fullName }}</strong>
+                <strong class="fastest-name">{{ fastest.fullName || 'Winner' }}</strong>
               </div>
             </div>
             <div class="text-end">
@@ -62,7 +78,7 @@ import { ConnectionBadgeComponent } from '../../../shared/components/connection-
         </div>
 
         <!-- Waiting for next question message -->
-        <div class="next-step-hint text-secondary small py-2">
+        <div *ngIf="state.sessionStatus() !== 'Completed'" class="next-step-hint text-secondary small py-2">
           <span class="spinner-grow spinner-grow-sm me-1 text-indigo"></span>
           Waiting for the Quiz Master to start the next question...
         </div>

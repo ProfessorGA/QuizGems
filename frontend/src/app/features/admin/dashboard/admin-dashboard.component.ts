@@ -287,9 +287,44 @@ import {
 
             <!-- STAGE 5: COMPLETED -> TOURNAMENT PODIUM -->
             <div *ngIf="session()?.status === 'Completed'" class="text-center py-4 my-auto">
-              <div class="trophy-hero mx-auto mb-3">🏆</div>
-              <h2 class="h3 fw-bold text-white mb-2">COMPETITION COMPLETED</h2>
+              <div class="trophy-hero mx-auto mb-2">🏆</div>
+              <h2 class="h3 fw-bold text-white mb-1">GRAND FINALE PODIUM</h2>
               <p class="text-secondary small mb-4">All {{ session()?.totalQuestions }} questions have been evaluated.</p>
+
+              <!-- Top 3 Podium Visual -->
+              <div class="row g-2 justify-content-center align-items-end mb-4" *ngIf="scoreboard().length > 0">
+                
+                <!-- 2nd Place (Silver) -->
+                <div class="col-4" *ngIf="scoreboard().length >= 2">
+                  <div class="podium-card p-3 rounded-4 bg-surface border border-secondary border-opacity-25" style="height: 170px;">
+                    <span class="fs-3 d-block mb-1">🥈</span>
+                    <span class="badge bg-secondary mb-1">#2 SILVER</span>
+                    <strong class="text-white d-block text-truncate small">{{ scoreboard()[1].fullName }}</strong>
+                    <span class="text-indigo fw-bold fs-6">{{ scoreboard()[1].totalScore }} pts</span>
+                  </div>
+                </div>
+
+                <!-- 1st Place (Gold Champion) -->
+                <div class="col-4">
+                  <div class="podium-card p-3 rounded-4 bg-surface border border-warning shadow-lg" style="height: 200px; background: rgba(245, 158, 11, 0.1) !important;">
+                    <span class="fs-1 d-block mb-1">👑</span>
+                    <span class="badge bg-warning text-dark fw-bold mb-1">#1 CHAMPION</span>
+                    <strong class="text-white d-block text-truncate">{{ scoreboard()[0].fullName }}</strong>
+                    <span class="text-warning fw-bold fs-5">{{ scoreboard()[0].totalScore }} pts</span>
+                  </div>
+                </div>
+
+                <!-- 3rd Place (Bronze) -->
+                <div class="col-4" *ngIf="scoreboard().length >= 3">
+                  <div class="podium-card p-3 rounded-4 bg-surface border border-secondary border-opacity-25" style="height: 150px;">
+                    <span class="fs-3 d-block mb-1">🥉</span>
+                    <span class="badge bg-dark border border-secondary text-secondary mb-1">#3 BRONZE</span>
+                    <strong class="text-white d-block text-truncate small">{{ scoreboard()[2].fullName }}</strong>
+                    <span class="text-indigo fw-bold fs-6">{{ scoreboard()[2].totalScore }} pts</span>
+                  </div>
+                </div>
+
+              </div>
 
               <div class="d-flex align-items-center justify-content-center gap-3">
                 <button class="btn btn-primary-gradient px-4 py-2 fw-bold" (click)="exportCsv()">
