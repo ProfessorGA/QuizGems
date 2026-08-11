@@ -6,7 +6,10 @@ public class ParticipantHubDto
 {
     public Guid Id { get; set; }
     public string FullName { get; set; } = string.Empty;
+    public string? PreviousFullName { get; set; }
+    public bool HasRenamed { get; set; }
     public bool IsConnected { get; set; }
+    public bool IsKicked { get; set; }
     public int TotalScore { get; set; }
     public int Rank { get; set; }
     public bool HasAnsweredCurrentQuestion { get; set; }

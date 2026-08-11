@@ -15,10 +15,19 @@ public class JoinSessionResponse
     public string SessionCode { get; set; } = string.Empty;
     public string SessionName { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
+    public string? PreviousFullName { get; set; }
+    public bool HasRenamed { get; set; }
     public SessionStatus SessionStatus { get; set; }
     public int CurrentQuestionNumber { get; set; }
     public int TotalQuestions { get; set; }
     public int QuestionDurationSeconds { get; set; }
+}
+
+public class RenameParticipantRequest
+{
+    public string SessionCode { get; set; } = string.Empty;
+    public Guid ParticipantId { get; set; }
+    public string NewFullName { get; set; } = string.Empty;
 }
 
 public class SubmitAnswerRequest
@@ -41,6 +50,8 @@ public class ParticipantStateDto
 {
     public Guid ParticipantId { get; set; }
     public string FullName { get; set; } = string.Empty;
+    public string? PreviousFullName { get; set; }
+    public bool HasRenamed { get; set; }
     public string SessionCode { get; set; } = string.Empty;
     public string SessionName { get; set; } = string.Empty;
     public SessionStatus SessionStatus { get; set; }

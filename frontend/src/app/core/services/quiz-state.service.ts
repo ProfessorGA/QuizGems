@@ -26,6 +26,8 @@ export class QuizStateService {
   public participant = signal<JoinSessionResponse | null>(null);
   public sessionCode = signal<string>('');
   public participantName = signal<string>('');
+  public previousName = signal<string | null>(null);
+  public hasRenamed = signal<boolean>(false);
 
   // Live Competition State
   public sessionStatus = signal<SessionStatus>(SessionStatus.Created);
@@ -390,6 +392,35 @@ export class QuizStateService {
       this.liveParticipants.set(
         current.map(p => p.id === dto.participantId ? { ...p, hasAnsweredCurrentQuestion: true } : p)
       );
+    });
+
+    this.signalR.participantRenamed$.subscribe(({ participantId, newFullName, previousFullName }) => {
+      // Update in participant monitoring
+      const current = this.liveParticipants();
+      this.liveParticipants.set(
+        current.map(p => p.id === participantId ? { ...p, fullName: newFullName, previousFullName, hasRenamed: true } : p)
+      );
+
+      // If it's me
+      if (this.participant()?.participantId === participantId) {
+        this.participantName.set(newFullName);
+        this.hasRenamed.set(true);
+        this.previousName.set(previousFullName);
+        const p = this.participant();
+        if (p) {
+          this.setParticipantSession({ ...p, fullName: newFullName, previousFullName, hasRenamed: true });
+        }
+      }
+    });
+
+    this.signalR.participantKicked$.subscribe(({ participantId, reason }) => {
+      if (this.participant()?.participantId === participantId) {
+        this.clearParticipantSession();
+        this.router.navigate(['/join'], { queryParams: { kicked: true, reason } });
+      } else {
+        const current = this.liveParticipants();
+        this.liveParticipants.set(current.filter(p => p.id !== participantId));
+      }
     });
 
     this.signalR.sessionReset$.subscribe(() => {

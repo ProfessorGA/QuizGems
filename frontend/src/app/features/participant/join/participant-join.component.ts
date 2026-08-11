@@ -201,6 +201,12 @@ export class ParticipantJoinComponent {
       if (params['deleted']) {
         this.infoMessage.set('The previous session was closed by the host.');
       }
+      if (params['reset']) {
+        this.infoMessage.set('The host reset the contestants. Please re-enter to join fresh.');
+      }
+      if (params['kicked']) {
+        this.errorMessage.set(params['reason'] || 'You were removed from this competition by the Quiz Master.');
+      }
     });
   }
 

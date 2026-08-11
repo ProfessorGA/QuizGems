@@ -119,6 +119,28 @@ public class ParticipantController : ControllerBase
         }
     }
 
+    [HttpPost("rename")]
+    public async Task<ActionResult<ParticipantStateDto>> RenameParticipant([FromBody] RenameParticipantRequest request)
+    {
+        try
+        {
+            var updated = await _sessionManager.RenameParticipantAsync(request.SessionCode, request.ParticipantId, request.NewFullName);
+            return Ok(updated);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { message = "Session or participant not found." });
+        }
+    }
+
     [HttpPost("answer")]
     public async Task<ActionResult<SubmitAnswerResponse>> SubmitAnswer([FromBody] SubmitAnswerRequest request)
     {

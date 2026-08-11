@@ -7,6 +7,8 @@ public interface IQuizHubClient
     Task ParticipantJoined(ParticipantHubDto participant);
     Task ParticipantDisconnected(Guid participantId, string fullName);
     Task ParticipantReconnected(Guid participantId, string fullName);
+    Task ParticipantRenamed(Guid participantId, string newFullName, string previousFullName);
+    Task ParticipantKicked(Guid participantId, string reason);
     Task SessionStarted(SessionStateHubDto sessionState);
     Task VotingStarted(VotingStartedHubDto votingState);
     Task VotingEnded(VotingEndedHubDto votingSummary);

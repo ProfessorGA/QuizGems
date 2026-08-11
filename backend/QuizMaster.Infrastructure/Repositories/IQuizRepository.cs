@@ -20,6 +20,8 @@ public interface IQuizRepository
     Task<QuizParticipant> AddParticipantAsync(QuizParticipant participant, CancellationToken ct = default);
     Task UpdateParticipantAsync(QuizParticipant participant, CancellationToken ct = default);
     Task UpdateParticipantConnectionAsync(Guid participantId, string? connectionId, bool isConnected, CancellationToken ct = default);
+    Task<bool> KickParticipantAsync(Guid participantId, CancellationToken ct = default);
+    Task<int> BulkKickParticipantsAsync(Guid sessionId, IEnumerable<Guid> participantIds, CancellationToken ct = default);
 
     // Questions
     Task<QuizQuestion?> GetQuestionByNumberAsync(Guid sessionId, int questionNumber, CancellationToken ct = default);

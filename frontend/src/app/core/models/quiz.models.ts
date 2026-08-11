@@ -79,10 +79,18 @@ export interface JoinSessionResponse {
   sessionCode: string;
   sessionName: string;
   fullName: string;
+  previousFullName?: string;
+  hasRenamed?: boolean;
   sessionStatus: SessionStatus;
   currentQuestionNumber: number;
   totalQuestions: number;
   questionDurationSeconds: number;
+}
+
+export interface RenameParticipantRequest {
+  sessionCode: string;
+  participantId: string;
+  newFullName: string;
 }
 
 export interface SubmitAnswerRequest {
@@ -102,6 +110,8 @@ export interface SubmitAnswerResponse {
 export interface ParticipantStateDto {
   participantId: string;
   fullName: string;
+  previousFullName?: string;
+  hasRenamed?: boolean;
   sessionCode: string;
   sessionName: string;
   sessionStatus: SessionStatus;
@@ -123,7 +133,10 @@ export interface ParticipantStateDto {
 export interface ParticipantHubDto {
   id: string;
   fullName: string;
+  previousFullName?: string;
+  hasRenamed?: boolean;
   isConnected: boolean;
+  isKicked?: boolean;
   totalScore: number;
   rank: number;
   hasAnsweredCurrentQuestion: boolean;

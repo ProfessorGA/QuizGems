@@ -114,6 +114,49 @@ public class QuizRepository : IQuizRepository
         }
     }
 
+    public async Task<bool> KickParticipantAsync(Guid participantId, CancellationToken ct = default)
+    {
+        var participant = await _context.Participants.FindAsync(new object[] { participantId }, ct);
+        if (participant == null) return false;
+
+        participant.IsKicked = true;
+        participant.IsConnected = false;
+        participant.IsActive = false;
+
+        var answers = await _context.Answers.Where(a => a.ParticipantId == participantId).ToListAsync(ct);
+        if (answers.Count > 0)
+        {
+            _context.Answers.RemoveRange(answers);
+        }
+
+        _context.Participants.Remove(participant);
+        await _context.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<int> BulkKickParticipantsAsync(Guid sessionId, IEnumerable<Guid> participantIds, CancellationToken ct = default)
+    {
+        var idList = participantIds.ToList();
+        var participants = await _context.Participants
+            .Where(p => p.SessionId == sessionId && idList.Contains(p.Id))
+            .ToListAsync(ct);
+
+        if (participants.Count == 0) return 0;
+
+        var answers = await _context.Answers
+            .Where(a => a.SessionId == sessionId && idList.Contains(a.ParticipantId))
+            .ToListAsync(ct);
+
+        if (answers.Count > 0)
+        {
+            _context.Answers.RemoveRange(answers);
+        }
+
+        _context.Participants.RemoveRange(participants);
+        await _context.SaveChangesAsync(ct);
+        return participants.Count;
+    }
+
     public async Task<QuizQuestion?> GetQuestionByNumberAsync(Guid sessionId, int questionNumber, CancellationToken ct = default)
     {
         return await _context.Questions

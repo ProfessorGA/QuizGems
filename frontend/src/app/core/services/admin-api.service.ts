@@ -95,6 +95,14 @@ export class AdminApiService {
     return this.http.post<FinalScoreboardDto>(`${this.baseUrl}/sessions/${id}/terminate`, {});
   }
 
+  kickParticipant(sessionId: string, participantId: string, reason?: string): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.baseUrl}/sessions/${sessionId}/participants/${participantId}/kick`, { reason });
+  }
+
+  bulkKickParticipants(sessionId: string, participantIds: string[], reason?: string): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.baseUrl}/sessions/${sessionId}/participants/bulk-kick`, { participantIds, reason });
+  }
+
   deleteSession(id: string): Observable<{ message: string }> {
     return this.http.delete<{ message: string }>(`${this.baseUrl}/sessions/${id}`);
   }

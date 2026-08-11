@@ -301,6 +301,52 @@ public class AdminSessionsController : ControllerBase
         }
     }
 
+    [HttpPost("{id:guid}/participants/{participantId:guid}/kick")]
+    public async Task<IActionResult> KickParticipant(Guid id, Guid participantId, [FromBody] KickReasonRequest? request)
+    {
+        var session = await _repository.GetSessionByIdAsync(id);
+        if (session == null) return NotFound(new { message = "Session not found." });
+
+        var reason = request?.Reason ?? "Removed by tournament host for anti-cheat verification or policy violation.";
+        var kicked = await _repository.KickParticipantAsync(participantId);
+        if (!kicked) return NotFound(new { message = "Participant not found." });
+
+        // Notify kicked participant and whole room
+        await _hubContext.Clients.Group($"session_{session.SessionCode}").ParticipantKicked(participantId, reason);
+
+        var scoreboard = await _scoringService.GetLiveScoreboardAsync(id);
+        await _hubContext.Clients.Group($"session_{session.SessionCode}").ScoreboardUpdated(scoreboard);
+        await _hubContext.Clients.Group($"admin_{session.SessionCode}").ScoreboardUpdated(scoreboard);
+
+        return Ok(new { message = "Contestant successfully kicked from session." });
+    }
+
+    [HttpPost("{id:guid}/participants/bulk-kick")]
+    public async Task<IActionResult> BulkKickParticipants(Guid id, [FromBody] BulkKickRequest request)
+    {
+        var session = await _repository.GetSessionByIdAsync(id);
+        if (session == null) return NotFound(new { message = "Session not found." });
+
+        if (request?.ParticipantIds == null || request.ParticipantIds.Count == 0)
+        {
+            return BadRequest(new { message = "No contestants selected." });
+        }
+
+        var reason = request.Reason ?? "Removed by tournament host.";
+        var count = await _repository.BulkKickParticipantsAsync(id, request.ParticipantIds);
+
+        foreach (var pid in request.ParticipantIds)
+        {
+            await _hubContext.Clients.Group($"session_{session.SessionCode}").ParticipantKicked(pid, reason);
+        }
+
+        var scoreboard = await _scoringService.GetLiveScoreboardAsync(id);
+        await _hubContext.Clients.Group($"session_{session.SessionCode}").ScoreboardUpdated(scoreboard);
+        await _hubContext.Clients.Group($"admin_{session.SessionCode}").ScoreboardUpdated(scoreboard);
+
+        return Ok(new { message = $"Successfully kicked {count} contestant(s)." });
+    }
+
     [HttpGet("{id:guid}/export")]
     public async Task<IActionResult> ExportResults(Guid id)
     {
@@ -335,4 +381,15 @@ public class AdminSessionsController : ControllerBase
 
         return Ok(new { message = $"Session '{sessionCode}' and all temporary competition data were successfully deleted." });
     }
+}
+
+public class KickReasonRequest
+{
+    public string? Reason { get; set; }
+}
+
+public class BulkKickRequest
+{
+    public List<Guid> ParticipantIds { get; set; } = new();
+    public string? Reason { get; set; }
 }

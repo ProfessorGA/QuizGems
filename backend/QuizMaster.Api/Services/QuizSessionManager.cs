@@ -18,6 +18,7 @@ public interface IQuizSessionManager
     Task<NextQuestionHubDto?> NextQuestionAsync(Guid sessionId, CancellationToken ct = default);
     Task<FinalScoreboardDto> CompleteQuizAsync(Guid sessionId, CancellationToken ct = default);
     Task<SubmitAnswerResponse> SubmitAnswerAsync(string sessionCode, Guid participantId, int selectedOption, CancellationToken ct = default);
+    Task<ParticipantStateDto> RenameParticipantAsync(string sessionCode, Guid participantId, string newFullName, CancellationToken ct = default);
     Task<ParticipantStateDto> GetParticipantStateAsync(string sessionCode, Guid participantId, CancellationToken ct = default);
     Task<SessionDetailDto> GetSessionDetailAsync(Guid sessionId, CancellationToken ct = default);
 }
@@ -467,6 +468,40 @@ public class QuizSessionManager : IQuizSessionManager
             ResponseMilliseconds = responseMs,
             ServerReceivedAt = serverReceivedAt
         };
+    }
+
+    public async Task<ParticipantStateDto> RenameParticipantAsync(string sessionCode, Guid participantId, string newFullName, CancellationToken ct = default)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<IQuizRepository>();
+
+        var participant = await repo.GetParticipantByIdAsync(participantId, ct)
+            ?? throw new KeyNotFoundException("Participant not found");
+
+        if (participant.HasRenamed)
+        {
+            throw new InvalidOperationException("Name can only be changed once per tournament session.");
+        }
+
+        if (string.IsNullOrWhiteSpace(newFullName))
+        {
+            throw new ArgumentException("Name cannot be empty.");
+        }
+
+        var cleanName = newFullName.Trim();
+        var previousName = participant.FullName;
+
+        participant.PreviousFullName = previousName;
+        participant.FullName = cleanName;
+        participant.HasRenamed = true;
+
+        await repo.UpdateParticipantAsync(participant, ct);
+
+        // Broadcast to both session and admin groups
+        await _hubContext.Clients.Group($"session_{sessionCode}").ParticipantRenamed(participantId, cleanName, previousName);
+        await _hubContext.Clients.Group($"admin_{sessionCode}").ParticipantRenamed(participantId, cleanName, previousName);
+
+        return await GetParticipantStateAsync(sessionCode, participantId, ct);
     }
 
     public async Task<ParticipantStateDto> GetParticipantStateAsync(string sessionCode, Guid participantId, CancellationToken ct = default)

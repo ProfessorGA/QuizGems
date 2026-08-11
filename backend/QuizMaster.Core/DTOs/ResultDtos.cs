@@ -5,6 +5,8 @@ public class ScoreboardEntryDto
     public int Rank { get; set; }
     public Guid ParticipantId { get; set; }
     public string FullName { get; set; } = string.Empty;
+    public string? PreviousFullName { get; set; }
+    public bool HasRenamed { get; set; }
     public int TotalScore { get; set; }
     public int CorrectAnswersCount { get; set; }
     public int FastestWinsCount { get; set; }

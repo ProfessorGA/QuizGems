@@ -410,36 +410,102 @@ import {
 
       </div>
 
-      <!-- Bottom Tabbed Section: Participants Live Grid -->
+      <!-- Bottom Section: Participants Live Grid with Kick & Anti-Fraud Tracking -->
       <div class="glass-card p-4 rounded-4 mb-4">
-        <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom border-secondary border-opacity-25">
+        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3 pb-2 border-bottom border-secondary border-opacity-25">
           <div class="d-flex align-items-center gap-2">
-            <i class="bi bi-phone-fill text-indigo"></i>
-            <h2 class="h5 fw-bold text-white mb-0">PARTICIPANT MONITORING</h2>
-            <span class="badge bg-indigo-subtle text-indigo ms-2">{{ participants().length }} Active</span>
+            <i class="bi bi-shield-shaded text-indigo fs-5"></i>
+            <h2 class="h5 fw-bold text-white mb-0">CONTESTANT MONITORING & ANTI-FRAUD</h2>
+            <span class="badge bg-indigo-subtle text-indigo ms-2">{{ participants().length }} Total</span>
+          </div>
+
+          <!-- Bulk Actions Bar -->
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <button 
+              type="button" 
+              class="btn btn-outline-secondary btn-sm px-2 py-1"
+              (click)="toggleSelectAll()"
+            >
+              {{ isAllSelected() ? 'Deselect All' : 'Select All' }}
+            </button>
+            <button 
+              type="button" 
+              class="btn btn-outline-danger btn-sm px-3 py-1 fw-bold"
+              (click)="onBulkKickSelected()"
+              [disabled]="selectedParticipantIds().length === 0 || isActionLoading()"
+            >
+              <i class="bi bi-person-x-fill me-1"></i>Kick Selected ({{ selectedParticipantIds().length }})
+            </button>
+            <button 
+              type="button" 
+              class="btn btn-outline-warning btn-sm px-2 py-1"
+              (click)="onKickDisconnected()"
+              [disabled]="isActionLoading()"
+              title="Kick all currently disconnected contestants"
+            >
+              <i class="bi bi-plug me-1"></i>Kick Inactive
+            </button>
           </div>
         </div>
 
         <div class="row g-2 g-md-3">
-          <div class="col-12 col-sm-6 col-md-4 col-lg-3" *ngFor="let p of participants()">
-            <div class="participant-box p-3 rounded-3 d-flex align-items-center justify-content-between">
+          <div class="col-12 col-sm-6 col-lg-4 col-xl-3" *ngFor="let p of participants()">
+            <div 
+              class="participant-box p-3 rounded-3 d-flex flex-column justify-content-between h-100"
+              [class.border-warning]="p.hasRenamed"
+              [class.border-danger]="!p.isConnected"
+            >
               <div>
-                <div class="d-flex align-items-center gap-2 mb-1">
-                  <span class="status-dot" [class.connected]="p.isConnected"></span>
-                  <strong class="text-white text-truncate" style="max-width: 130px;" [title]="p.fullName">
-                    {{ p.fullName }}
-                  </strong>
+                <div class="d-flex align-items-start justify-content-between gap-2 mb-1">
+                  <div class="d-flex align-items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      class="form-check-input mt-0"
+                      [checked]="selectedParticipantIds().includes(p.id)"
+                      (change)="toggleSelectParticipant(p.id)"
+                    />
+                    <span class="status-dot" [class.connected]="p.isConnected" [title]="p.isConnected ? 'Connected' : 'Disconnected'"></span>
+                    <strong class="text-white text-truncate" style="max-width: 140px;" [title]="p.fullName">
+                      {{ p.fullName }}
+                    </strong>
+                  </div>
+
+                  <!-- Individual Kick Button -->
+                  <button 
+                    class="btn btn-link text-danger p-0" 
+                    style="font-size: 0.85rem;"
+                    (click)="onKickParticipant(p)"
+                    title="Kick this contestant"
+                  >
+                    <i class="bi bi-person-x-fill"></i>
+                  </button>
                 </div>
-                <span class="text-secondary small">Score: {{ p.totalScore }} pts</span>
+
+                <!-- Fraud / Name-Change Tracker Alert -->
+                <div *ngIf="p.hasRenamed || p.previousFullName" class="mb-2">
+                  <span class="badge bg-warning text-dark small" style="font-size: 0.65rem;" [title]="'Originally joined as: ' + (p.previousFullName || 'Unknown')">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>formerly: {{ p.previousFullName }}
+                  </span>
+                </div>
+
+                <div class="d-flex align-items-center justify-content-between small text-secondary">
+                  <span>Score: <strong class="text-indigo">{{ p.totalScore }} pts</strong></span>
+                  <span class="badge" [ngClass]="p.isConnected ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'" style="font-size: 0.65rem;">
+                    {{ p.isConnected ? 'Active' : 'Closed' }}
+                  </span>
+                </div>
               </div>
 
               <!-- Answer Status Indicator -->
-              <div>
-                <span *ngIf="p.hasAnsweredCurrentQuestion" class="badge bg-success-subtle text-success">
-                  <i class="bi bi-check-lg me-1"></i>Answered
+              <div class="mt-2 pt-2 border-top border-secondary border-opacity-10 d-flex align-items-center justify-content-between">
+                <span *ngIf="p.hasAnsweredCurrentQuestion" class="badge bg-success-subtle text-success small">
+                  <i class="bi bi-check-lg me-1"></i>Answer Locked
                 </span>
-                <span *ngIf="!p.hasAnsweredCurrentQuestion && session()?.status === 'Voting'" class="badge bg-secondary-subtle text-secondary">
+                <span *ngIf="!p.hasAnsweredCurrentQuestion && session()?.status === 'Voting'" class="badge bg-secondary-subtle text-secondary small">
                   Thinking...
+                </span>
+                <span *ngIf="session()?.status !== 'Voting'" class="text-muted small" style="font-size: 0.7rem;">
+                  Rank #{{ p.rank || '-' }}
                 </span>
               </div>
             </div>
@@ -669,6 +735,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   public isActionLoading = signal<boolean>(false);
   public showDeleteModal = signal<boolean>(false);
   public selectedCorrectOption = signal<number | null>(null);
+  public selectedParticipantIds = signal<string[]>([]);
 
   public remainingSeconds = signal<number>(0);
   public answeredCount = signal<number>(0);
@@ -1009,6 +1076,98 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         this.router.navigate(['/admin/sessions']);
       },
       error: (err) => alert('Failed to delete session.')
+    });
+  }
+
+  public toggleSelectParticipant(id: string): void {
+    const current = this.selectedParticipantIds();
+    if (current.includes(id)) {
+      this.selectedParticipantIds.set(current.filter(x => x !== id));
+    } else {
+      this.selectedParticipantIds.set([...current, id]);
+    }
+  }
+
+  public toggleSelectAll(): void {
+    if (this.isAllSelected()) {
+      this.selectedParticipantIds.set([]);
+    } else {
+      this.selectedParticipantIds.set(this.participants().map(p => p.id));
+    }
+  }
+
+  public isAllSelected(): boolean {
+    const pList = this.participants();
+    return pList.length > 0 && this.selectedParticipantIds().length === pList.length;
+  }
+
+  public onKickParticipant(p: ParticipantHubDto): void {
+    const reason = prompt(`Reason for removing contestant "${p.fullName}" (optional):`, 'Tournament policy or anti-fraud verification violation');
+    if (reason === null) return;
+
+    this.isActionLoading.set(true);
+    this.adminApi.kickParticipant(this.sessionId, p.id, reason).subscribe({
+      next: (res) => {
+        this.isActionLoading.set(false);
+        this.participants.set(this.participants().filter(x => x.id !== p.id));
+        this.selectedParticipantIds.set(this.selectedParticipantIds().filter(x => x !== p.id));
+        this.loadScoreboard();
+      },
+      error: (err) => {
+        this.isActionLoading.set(false);
+        alert(err.error?.message || 'Failed to remove contestant.');
+      }
+    });
+  }
+
+  public onBulkKickSelected(): void {
+    const ids = this.selectedParticipantIds();
+    if (ids.length === 0) return;
+
+    if (!confirm(`Are you sure you want to remove ${ids.length} selected contestant(s) from this session?`)) {
+      return;
+    }
+
+    this.isActionLoading.set(true);
+    this.adminApi.bulkKickParticipants(this.sessionId, ids, 'Removed by Quiz Master during group verification').subscribe({
+      next: (res) => {
+        this.isActionLoading.set(false);
+        this.participants.set(this.participants().filter(x => !ids.includes(x.id)));
+        this.selectedParticipantIds.set([]);
+        this.loadScoreboard();
+        alert(res.message || 'Selected contestants removed.');
+      },
+      error: (err) => {
+        this.isActionLoading.set(false);
+        alert(err.error?.message || 'Failed to remove selected contestants.');
+      }
+    });
+  }
+
+  public onKickDisconnected(): void {
+    const inactive = this.participants().filter(p => !p.isConnected);
+    if (inactive.length === 0) {
+      alert('No inactive or disconnected contestants found.');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to remove all ${inactive.length} disconnected contestant(s)?`)) {
+      return;
+    }
+
+    const ids = inactive.map(p => p.id);
+    this.isActionLoading.set(true);
+    this.adminApi.bulkKickParticipants(this.sessionId, ids, 'Removed due to disconnection').subscribe({
+      next: (res) => {
+        this.isActionLoading.set(false);
+        this.participants.set(this.participants().filter(p => p.isConnected));
+        this.selectedParticipantIds.set(this.selectedParticipantIds().filter(id => !ids.includes(id)));
+        this.loadScoreboard();
+      },
+      error: (err) => {
+        this.isActionLoading.set(false);
+        alert(err.error?.message || 'Failed to remove inactive contestants.');
+      }
     });
   }
 

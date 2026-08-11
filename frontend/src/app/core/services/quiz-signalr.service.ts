@@ -31,6 +31,8 @@ export class QuizSignalRService {
   public participantJoined$ = new Subject<ParticipantHubDto>();
   public participantDisconnected$ = new Subject<{ participantId: string; fullName: string }>();
   public participantReconnected$ = new Subject<{ participantId: string; fullName: string }>();
+  public participantRenamed$ = new Subject<{ participantId: string; newFullName: string; previousFullName: string }>();
+  public participantKicked$ = new Subject<{ participantId: string; reason: string }>();
   public sessionStarted$ = new Subject<SessionStateHubDto>();
   public votingStarted$ = new Subject<VotingStartedHubDto>();
   public votingEnded$ = new Subject<VotingEndedHubDto>();
@@ -101,6 +103,8 @@ export class QuizSignalRService {
     this.hubConnection.on('ParticipantJoined', (dto: ParticipantHubDto) => this.participantJoined$.next(dto));
     this.hubConnection.on('ParticipantDisconnected', (participantId: string, fullName: string) => this.participantDisconnected$.next({ participantId, fullName }));
     this.hubConnection.on('ParticipantReconnected', (participantId: string, fullName: string) => this.participantReconnected$.next({ participantId, fullName }));
+    this.hubConnection.on('ParticipantRenamed', (participantId: string, newFullName: string, previousFullName: string) => this.participantRenamed$.next({ participantId, newFullName, previousFullName }));
+    this.hubConnection.on('ParticipantKicked', (participantId: string, reason: string) => this.participantKicked$.next({ participantId, reason }));
     this.hubConnection.on('SessionStarted', (dto: SessionStateHubDto) => this.sessionStarted$.next(dto));
     this.hubConnection.on('VotingStarted', (dto: VotingStartedHubDto) => this.votingStarted$.next(dto));
     this.hubConnection.on('VotingEnded', (dto: VotingEndedHubDto) => this.votingEnded$.next(dto));
