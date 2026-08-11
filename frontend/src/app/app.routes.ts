@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { adminAuthGuard } from './core/guards/admin-auth.guard';
+import { adminAuthGuard, adminAuthChildGuard } from './core/guards/admin-auth.guard';
 import { participantGuard } from './core/guards/participant.guard';
 
 export const routes: Routes = [
@@ -50,6 +50,7 @@ export const routes: Routes = [
   {
     path: 'admin',
     canActivate: [adminAuthGuard],
+    canActivateChild: [adminAuthChildGuard],
     loadComponent: () => import('./features/admin/admin-shell.component').then(m => m.AdminShellComponent),
     children: [
       {
@@ -59,10 +60,12 @@ export const routes: Routes = [
       },
       {
         path: 'sessions',
+        canActivate: [adminAuthGuard],
         loadComponent: () => import('./features/admin/sessions/session-list.component').then(m => m.SessionListComponent)
       },
       {
         path: 'sessions/:id',
+        canActivate: [adminAuthGuard],
         loadComponent: () => import('./features/admin/dashboard/admin-dashboard.component').then(m => m.AdminDashboardComponent)
       }
     ]

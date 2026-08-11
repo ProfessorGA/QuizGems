@@ -161,6 +161,29 @@ using (var scope = app.Services.CreateScope())
         var db = services.GetRequiredService<QuizDbContext>();
         db.Database.EnsureCreated();
 
+        // Automatically ensure new columns exist in PostgreSQL/SQLite for zero-downtime upgrades
+        try
+        {
+            if (!isSqlite)
+            {
+                db.Database.ExecuteSqlRaw(@"
+                    ALTER TABLE ""Participants"" ADD COLUMN IF NOT EXISTS ""PreviousFullName"" text;
+                    ALTER TABLE ""Participants"" ADD COLUMN IF NOT EXISTS ""HasRenamed"" boolean DEFAULT FALSE NOT NULL;
+                    ALTER TABLE ""Participants"" ADD COLUMN IF NOT EXISTS ""IsKicked"" boolean DEFAULT FALSE NOT NULL;
+                ");
+            }
+            else
+            {
+                try { db.Database.ExecuteSqlRaw(@"ALTER TABLE Participants ADD COLUMN PreviousFullName TEXT;"); } catch {}
+                try { db.Database.ExecuteSqlRaw(@"ALTER TABLE Participants ADD COLUMN HasRenamed INTEGER DEFAULT 0 NOT NULL;"); } catch {}
+                try { db.Database.ExecuteSqlRaw(@"ALTER TABLE Participants ADD COLUMN IsKicked INTEGER DEFAULT 0 NOT NULL;"); } catch {}
+            }
+        }
+        catch (Exception schemaEx)
+        {
+            logger.LogWarning(schemaEx, "Schema update notice: {Message}", schemaEx.Message);
+        }
+
         // Seed default admin if not exists
         if (!db.AdminUsers.Any())
         {
@@ -185,7 +208,32 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// 8. Middleware Pipeline
 app.UseCors("CorsPolicy");
+
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Server error caught by global middleware: {Message}", ex.Message);
+
+        if (!context.Response.HasStarted)
+        {
+            context.Response.StatusCode = 500;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(new
+            {
+                message = "An unexpected error occurred on the server.",
+                details = ex.Message
+            }));
+        }
+    }
+});
 
 app.UseAuthentication();
 app.UseAuthorization();

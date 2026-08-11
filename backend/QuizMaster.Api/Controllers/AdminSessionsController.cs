@@ -77,20 +77,27 @@ public class AdminSessionsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<SessionListItemDto>>> GetAllSessions()
     {
-        var sessions = await _repository.GetAllSessionsAsync();
-        var dtos = sessions.Select(s => new SessionListItemDto
+        try
         {
-            Id = s.Id,
-            SessionCode = s.SessionCode,
-            SessionName = s.SessionName,
-            Status = s.Status,
-            TotalQuestions = s.TotalQuestions,
-            CurrentQuestionNumber = s.CurrentQuestionNumber,
-            ParticipantCount = s.Participants.Count,
-            CreatedAt = s.CreatedAt
-        }).ToList();
+            var sessions = await _repository.GetAllSessionsAsync();
+            var dtos = sessions.Select(s => new SessionListItemDto
+            {
+                Id = s.Id,
+                SessionCode = s.SessionCode,
+                SessionName = s.SessionName,
+                Status = s.Status,
+                TotalQuestions = s.TotalQuestions,
+                CurrentQuestionNumber = s.CurrentQuestionNumber,
+                ParticipantCount = s.Participants.Count,
+                CreatedAt = s.CreatedAt
+            }).ToList();
 
-        return Ok(dtos);
+            return Ok(dtos);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Error retrieving quiz sessions from database.", details = ex.Message });
+        }
     }
 
     [HttpGet("{id:guid}")]
