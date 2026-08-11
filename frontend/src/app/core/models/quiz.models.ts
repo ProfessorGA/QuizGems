@@ -259,3 +259,31 @@ export interface NextQuestionHubDto {
   questionNumber: number;
   totalQuestions: number;
 }
+
+export interface ParticipantAuditDto {
+  participantId: string;
+  fullName: string;
+  previousFullName?: string;
+  hasRenamed?: boolean;
+  isConnected: boolean;
+  totalScore: number;
+  rank: number;
+  totalCorrect: number;
+  totalFastest: number;
+  totalResponseSeconds: number;
+  joinedAt: string;
+  joinedAtIst: string;
+  questionBreakdown: ParticipantQuestionAuditDto[];
+}
+
+export interface ParticipantQuestionAuditDto {
+  questionNumber: number;
+  selectedOption?: number;
+  correctOption?: number;
+  isCorrect: boolean;
+  isFastest: boolean;
+  pointsAwarded: number;
+  responseSeconds?: number;
+  submittedAtUtc?: string;
+  submittedAtIst: string;
+}

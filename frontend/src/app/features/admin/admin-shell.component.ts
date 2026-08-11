@@ -91,10 +91,12 @@ export class AdminShellComponent {
   public username: string = '';
 
   constructor(private router: Router) {
-    this.username = localStorage.getItem('qm_admin_user') || 'Admin';
+    this.username = sessionStorage.getItem('qm_admin_user') || localStorage.getItem('qm_admin_user') || 'Admin';
   }
 
   public logout(): void {
+    sessionStorage.removeItem('qm_admin_token');
+    sessionStorage.removeItem('qm_admin_user');
     localStorage.removeItem('qm_admin_token');
     localStorage.removeItem('qm_admin_user');
     this.router.navigate(['/admin/login']);

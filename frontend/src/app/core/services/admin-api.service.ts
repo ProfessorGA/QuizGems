@@ -13,7 +13,8 @@ import {
   VotingEndedHubDto,
   QuestionResultHubDto,
   ScoreboardEntryDto,
-  FinalScoreboardDto
+  FinalScoreboardDto,
+  ParticipantAuditDto
 } from '../models/quiz.models';
 
 @Injectable({
@@ -87,8 +88,20 @@ export class AdminApiService {
     return this.http.get(`${this.baseUrl}/sessions/${id}/export`, { responseType: 'blob' });
   }
 
+  exportExcel(id: string): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/sessions/${id}/export-excel`, { responseType: 'blob' });
+  }
+
+  restartQuiz(id: string): Observable<{ message: string; session: any }> {
+    return this.http.post<{ message: string; session: any }>(`${this.baseUrl}/sessions/${id}/restart`, {});
+  }
+
   resetParticipants(id: string): Observable<{ message: string; session: any }> {
-    return this.http.post<{ message: string; session: any }>(`${this.baseUrl}/sessions/${id}/reset-participants`, {});
+    return this.restartQuiz(id);
+  }
+
+  getParticipantAudit(sessionId: string, participantId: string): Observable<ParticipantAuditDto> {
+    return this.http.get<ParticipantAuditDto>(`${this.baseUrl}/sessions/${sessionId}/participants/${participantId}/audit`);
   }
 
   terminateSession(id: string): Observable<FinalScoreboardDto> {

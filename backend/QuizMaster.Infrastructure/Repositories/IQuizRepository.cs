@@ -42,4 +42,5 @@ public interface IQuizRepository
     Task CreateAdminAsync(AdminUser admin, CancellationToken ct = default);
     Task EnsureDatabaseCreatedAsync(CancellationToken ct = default);
     Task ClearParticipantsAndAnswersAsync(Guid sessionId, CancellationToken ct = default);
+    Task RestartQuizSessionAsync(Guid sessionId, CancellationToken ct = default);
 }

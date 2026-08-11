@@ -274,24 +274,77 @@ public class AdminSessionsController : ControllerBase
         }
     }
 
-    [HttpPost("{id:guid}/reset-participants")]
-    public async Task<IActionResult> ResetParticipants(Guid id)
+    [HttpPost("{id:guid}/restart")]
+    public async Task<IActionResult> RestartQuiz(Guid id)
     {
         var session = await _repository.GetSessionByIdAsync(id);
         if (session == null) return NotFound(new { message = "Session not found." });
 
         var sessionCode = session.SessionCode;
-        await _repository.ClearParticipantsAndAnswersAsync(id);
+        await _repository.RestartQuizSessionAsync(id);
 
-        // Notify all participant devices in this session to reset and return to join screen
-        await _hubContext.Clients.Group($"session_{sessionCode}").SessionReset(sessionCode);
+        var scoreboard = await _scoringService.GetLiveScoreboardAsync(id);
+        await _hubContext.Clients.Group($"session_{sessionCode}").ScoreboardUpdated(scoreboard);
+        await _hubContext.Clients.Group($"admin_{sessionCode}").ScoreboardUpdated(scoreboard);
 
-        var updatedSession = await _repository.GetSessionByIdAsync(id);
+        var sessionState = new SessionStateHubDto
+        {
+            SessionId = session.Id,
+            SessionCode = session.SessionCode,
+            SessionName = session.SessionName,
+            Status = SessionStatus.Waiting,
+            CurrentQuestionNumber = 1,
+            TotalQuestions = session.TotalQuestions,
+            QuestionDurationSeconds = session.QuestionDurationSeconds,
+            ParticipantCount = session.Participants.Count
+        };
+        await _hubContext.Clients.Group($"session_{sessionCode}").SessionStarted(sessionState);
+
+        var updated = await _sessionManager.GetSessionDetailAsync(id);
         return Ok(new
         {
-            message = $"Session '{sessionCode}' participants cleared. Fresh start ready.",
-            session = updatedSession
+            message = $"Quiz '{sessionCode}' has been restarted fresh from Question 1. All contestants remain connected with scores reset to 0.",
+            session = updated
         });
+    }
+
+    [HttpPost("{id:guid}/reset-participants")]
+    public async Task<IActionResult> ResetParticipants(Guid id)
+    {
+        return await RestartQuiz(id);
+    }
+
+    [HttpGet("{id:guid}/participants/{participantId:guid}/audit")]
+    public async Task<ActionResult<ParticipantAuditDto>> GetParticipantAudit(Guid id, Guid participantId)
+    {
+        try
+        {
+            var audit = await _scoringService.GetParticipantAuditAsync(id, participantId);
+            return Ok(audit);
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { message = "Session or contestant not found." });
+        }
+    }
+
+    [HttpGet("{id:guid}/export-excel")]
+    public async Task<IActionResult> ExportExcelResults(Guid id)
+    {
+        try
+        {
+            var session = await _repository.GetSessionByIdAsync(id);
+            if (session == null) return NotFound(new { message = "Session not found." });
+
+            var excelBytes = await _scoringService.ExportResultsExcelAsync(id);
+            var filename = $"Quiz_Results_{session.SessionCode}_{DateTime.UtcNow.AddHours(5).AddMinutes(30):yyyyMMdd_HHmmss}.xlsx";
+
+            return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename);
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { message = "Session not found." });
+        }
     }
 
     [HttpPost("{id:guid}/terminate")]

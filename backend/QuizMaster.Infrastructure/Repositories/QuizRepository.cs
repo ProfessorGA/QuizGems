@@ -278,4 +278,42 @@ public class QuizRepository : IQuizRepository
 
         await _context.SaveChangesAsync(ct);
     }
+
+    public async Task RestartQuizSessionAsync(Guid sessionId, CancellationToken ct = default)
+    {
+        // 1. Remove all submitted answers
+        var answers = await _context.Answers.Where(a => a.SessionId == sessionId).ToListAsync(ct);
+        if (answers.Count > 0)
+        {
+            _context.Answers.RemoveRange(answers);
+        }
+
+        // 2. Reset scores and ranks for all enrolled participants (do NOT delete them)
+        var participants = await _context.Participants.Where(p => p.SessionId == sessionId).ToListAsync(ct);
+        foreach (var p in participants)
+        {
+            p.TotalScore = 0;
+            p.Rank = 1;
+        }
+
+        // 3. Reset all questions to Pending
+        var questions = await _context.Questions.Where(q => q.SessionId == sessionId).ToListAsync(ct);
+        foreach (var q in questions)
+        {
+            q.Status = QuestionStatus.Pending;
+            q.CorrectOption = null;
+            q.StartedAt = null;
+            q.VotingEndsAt = null;
+        }
+
+        // 4. Reset session status to Waiting on Question 1
+        var session = await _context.Sessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+        if (session != null)
+        {
+            session.Status = SessionStatus.Waiting;
+            session.CurrentQuestionNumber = 1;
+        }
+
+        await _context.SaveChangesAsync(ct);
+    }
 }

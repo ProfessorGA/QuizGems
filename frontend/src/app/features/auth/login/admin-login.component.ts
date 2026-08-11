@@ -183,8 +183,11 @@ export class AdminLoginComponent {
 
     this.adminApi.login({ username: this.username.trim(), password: this.password }).subscribe({
       next: (res) => {
-        localStorage.setItem('qm_admin_token', res.token);
-        localStorage.setItem('qm_admin_user', res.username);
+        sessionStorage.setItem('qm_admin_token', res.token);
+        sessionStorage.setItem('qm_admin_user', res.username);
+        // Clear any old local storage tokens
+        localStorage.removeItem('qm_admin_token');
+        localStorage.removeItem('qm_admin_user');
         this.isLoading.set(false);
 
         const returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/admin/sessions';

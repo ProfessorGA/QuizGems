@@ -13,6 +13,7 @@ import {
   ScoreboardEntryDto,
   QuestionResultHubDto,
   FinalScoreboardDto,
+  ParticipantAuditDto,
   SessionStatus
 } from '../../../core/models/quiz.models';
 
@@ -76,11 +77,11 @@ import {
 
             <button 
               class="btn btn-outline-warning btn-sm px-3 py-2 rounded-3 fw-bold" 
-              (click)="onResetParticipants()"
+              (click)="onRestartQuiz()"
               [disabled]="isActionLoading()"
-              title="Clear participants and answers for a clean fresh start"
+              title="Restart quiz from Question 1 with scores reset to 0 while keeping all enrolled contestants connected"
             >
-              <i class="bi bi-arrow-counterclockwise me-1"></i>Reset Players
+              <i class="bi bi-arrow-counterclockwise me-1"></i>Restart Quiz
             </button>
 
             <button 
@@ -345,9 +346,12 @@ import {
 
               </div>
 
-              <div class="d-flex align-items-center justify-content-center gap-3">
-                <button class="btn btn-primary-gradient px-4 py-2 fw-bold" (click)="exportCsv()">
-                  <i class="bi bi-download me-2"></i>Export Results CSV
+              <div class="d-flex align-items-center justify-content-center gap-3 flex-wrap">
+                <button class="btn btn-success px-4 py-2 fw-bold rounded-3 shadow" (click)="exportExcel()">
+                  <i class="bi bi-file-earmark-excel-fill me-2"></i>Export Excel (.xlsx)
+                </button>
+                <button class="btn btn-primary-gradient px-4 py-2 fw-bold rounded-3 shadow" (click)="exportCsv()">
+                  <i class="bi bi-download me-2"></i>Export CSV (.csv)
                 </button>
               </div>
             </div>
@@ -364,9 +368,14 @@ import {
                 <i class="bi bi-trophy-fill text-warning"></i>
                 <h2 class="h5 fw-bold text-white mb-0">LIVE SCOREBOARD</h2>
               </div>
-              <button class="btn btn-outline-secondary btn-sm px-2 py-1" (click)="exportCsv()" title="Export CSV">
-                <i class="bi bi-file-earmark-spreadsheet me-1"></i>CSV
-              </button>
+              <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-outline-success btn-sm px-2 py-1" (click)="exportExcel()" title="Export Excel (.xlsx)">
+                  <i class="bi bi-file-earmark-excel me-1"></i>XLSX
+                </button>
+                <button class="btn btn-outline-secondary btn-sm px-2 py-1" (click)="exportCsv()" title="Export CSV (.csv)">
+                  <i class="bi bi-file-earmark-spreadsheet me-1"></i>CSV
+                </button>
+              </div>
             </div>
 
             <div class="scoreboard-list flex-grow-1 overflow-auto pe-1" style="max-height: 480px;">
@@ -385,7 +394,12 @@ import {
                   <div class="rank-circle fw-bold">{{ entry.rank }}</div>
                   <div>
                     <div class="d-flex align-items-center gap-2">
-                      <strong class="contestant-name text-white d-block text-truncate" style="max-width: 160px;">
+                      <strong 
+                        class="contestant-name text-white d-block text-truncate" 
+                        style="max-width: 150px; cursor: pointer; text-decoration: underline dotted;"
+                        (click)="onOpenParticipantAudit(entry.participantId)"
+                        title="Click to view detailed objection & answer breakdown"
+                      >
                         {{ entry.fullName }}
                       </strong>
                       <span class="badge" [ngClass]="entry.isConnected ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'" style="font-size: 0.6rem;">
@@ -465,7 +479,12 @@ import {
                       (change)="toggleSelectParticipant(p.id)"
                     />
                     <span class="status-dot" [class.connected]="p.isConnected" [title]="p.isConnected ? 'Connected' : 'Disconnected'"></span>
-                    <strong class="text-white text-truncate" style="max-width: 140px;" [title]="p.fullName">
+                    <strong 
+                      class="text-white text-truncate" 
+                      style="max-width: 130px; cursor: pointer; text-decoration: underline dotted;" 
+                      [title]="'Click to view objection & answer breakdown for ' + p.fullName"
+                      (click)="onOpenParticipantAudit(p.id)"
+                    >
                       {{ p.fullName }}
                     </strong>
                   </div>
@@ -513,6 +532,108 @@ import {
         </div>
       </div>
 
+    </div>
+
+    <!-- Participant Audit & Objection Drill-Down Modal -->
+    <div class="modal fade show d-block" *ngIf="selectedAuditParticipant()" tabindex="-1" style="background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content glass-card border border-primary border-opacity-50 rounded-4 p-4 text-white">
+          
+          <div class="modal-header border-bottom border-secondary border-opacity-25 p-0 pb-3 mb-3 d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+              <div class="rank-circle bg-primary text-white fw-bold">{{ selectedAuditParticipant()?.rank || '-' }}</div>
+              <div>
+                <h3 class="modal-title h5 fw-bold mb-0 text-white">{{ selectedAuditParticipant()?.fullName }}</h3>
+                <span *ngIf="selectedAuditParticipant()?.hasRenamed" class="badge bg-warning text-dark small">
+                  formerly: "{{ selectedAuditParticipant()?.previousFullName }}"
+                </span>
+                <span class="text-secondary small ms-2">Joined: {{ selectedAuditParticipant()?.joinedAtIst }}</span>
+              </div>
+            </div>
+            <button type="button" class="btn-close btn-close-white" (click)="closeAuditModal()"></button>
+          </div>
+
+          <!-- Overall Summary Cards -->
+          <div class="row g-2 mb-3 text-center">
+            <div class="col-3">
+              <div class="p-2 rounded-3 bg-surface border border-secondary border-opacity-25">
+                <span class="text-secondary small d-block" style="font-size: 0.7rem;">TOTAL SCORE</span>
+                <strong class="fs-5 text-indigo">{{ selectedAuditParticipant()?.totalScore }} pts</strong>
+              </div>
+            </div>
+            <div class="col-3">
+              <div class="p-2 rounded-3 bg-surface border border-secondary border-opacity-25">
+                <span class="text-secondary small d-block" style="font-size: 0.7rem;">CORRECT</span>
+                <strong class="fs-5 text-success">{{ selectedAuditParticipant()?.totalCorrect }}</strong>
+              </div>
+            </div>
+            <div class="col-3">
+              <div class="p-2 rounded-3 bg-surface border border-secondary border-opacity-25">
+                <span class="text-secondary small d-block" style="font-size: 0.7rem;">FASTEST WINS</span>
+                <strong class="fs-5 text-warning">⚡ {{ selectedAuditParticipant()?.totalFastest }}</strong>
+              </div>
+            </div>
+            <div class="col-3">
+              <div class="p-2 rounded-3 bg-surface border border-secondary border-opacity-25">
+                <span class="text-secondary small d-block" style="font-size: 0.7rem;">TOTAL TIME</span>
+                <strong class="fs-5 text-info">{{ selectedAuditParticipant()?.totalResponseSeconds }}s</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Question-by-Question Breakdown Table -->
+          <h4 class="h6 fw-bold text-white mb-2"><i class="bi bi-clipboard2-data me-1 text-primary"></i> Question-by-Question Submission Log</h4>
+          <div class="table-responsive overflow-auto" style="max-height: 300px;">
+            <table class="table table-dark table-hover align-middle mb-0 small">
+              <thead>
+                <tr class="text-secondary">
+                  <th>Q#</th>
+                  <th>Chosen Answer</th>
+                  <th>Official Answer</th>
+                  <th>Outcome</th>
+                  <th>Points</th>
+                  <th>Locked Time</th>
+                  <th>Timestamp (IST)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let q of selectedAuditParticipant()?.questionBreakdown">
+                  <td class="fw-bold">Q{{ q.questionNumber }}</td>
+                  <td>
+                    <span *ngIf="q.selectedOption" class="badge bg-secondary">Option {{ q.selectedOption }}</span>
+                    <span *ngIf="!q.selectedOption" class="text-muted">No Answer</span>
+                  </td>
+                  <td>
+                    <span *ngIf="q.correctOption" class="badge bg-primary-subtle text-primary">Option {{ q.correctOption }}</span>
+                    <span *ngIf="!q.correctOption" class="text-muted">-</span>
+                  </td>
+                  <td>
+                    <span *ngIf="q.isCorrect" class="badge bg-success-subtle text-success">
+                      ✓ CORRECT <span *ngIf="q.isFastest">⚡</span>
+                    </span>
+                    <span *ngIf="!q.isCorrect && q.selectedOption" class="badge bg-danger-subtle text-danger">
+                      ✗ WRONG
+                    </span>
+                    <span *ngIf="!q.selectedOption" class="badge bg-secondary-subtle text-secondary">
+                      ⏱️ TIMED OUT
+                    </span>
+                  </td>
+                  <td class="fw-bold text-indigo">+{{ q.pointsAwarded }}</td>
+                  <td>{{ q.responseSeconds ? q.responseSeconds + 's' : '-' }}</td>
+                  <td class="text-secondary" style="font-size: 0.7rem;">{{ q.submittedAtIst }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="modal-footer border-0 p-0 mt-3 d-flex justify-content-end">
+            <button type="button" class="btn btn-secondary px-4 py-2 rounded-3" (click)="closeAuditModal()">
+              Close
+            </button>
+          </div>
+
+        </div>
+      </div>
     </div>
 
     <!-- Delete Confirmation Modal -->
@@ -739,6 +860,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
 
   public remainingSeconds = signal<number>(0);
   public answeredCount = signal<number>(0);
+  public selectedAuditParticipant = signal<ParticipantAuditDto | null>(null);
 
   private timerInterval: any = null;
 
@@ -1003,16 +1125,16 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
     });
   }
 
-  public onResetParticipants(): void {
-    if (!confirm('Are you sure you want to reset all contestants? This will clear participants and answers for this session, allowing a clean fresh start.')) {
+  public onRestartQuiz(): void {
+    if (!confirm('Are you sure you want to restart this quiz from Question 1? All connected contestants will remain enrolled in the room with scores reset to 0 for a fresh competition.')) {
       return;
     }
     this.isActionLoading.set(true);
-    this.adminApi.resetParticipants(this.sessionId).subscribe({
+    this.adminApi.restartQuiz(this.sessionId).subscribe({
       next: (res) => {
         this.isActionLoading.set(false);
-        this.participants.set([]);
-        this.scoreboard.set([]);
+        this.loadScoreboard();
+        this.loadParticipants();
         this.currentQuestionResult.set(null);
         this.answeredCount.set(0);
         this.selectedCorrectOption.set(null);
@@ -1020,17 +1142,32 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         if (s) {
           this.session.set({ ...s, status: SessionStatus.Waiting, currentQuestionNumber: 1 });
         }
-        alert(res.message || 'Session contestants cleared. Fresh start ready.');
+        alert(res.message || 'Quiz restarted from Question 1. All contestants remain in the room with 0 points.');
       },
       error: (err) => {
         this.isActionLoading.set(false);
-        alert(err.error?.message || 'Failed to reset contestants.');
+        alert(err.error?.message || 'Failed to restart quiz.');
       }
     });
   }
 
+  public onResetParticipants(): void {
+    this.onRestartQuiz();
+  }
+
+  public onOpenParticipantAudit(participantId: string): void {
+    this.adminApi.getParticipantAudit(this.sessionId, participantId).subscribe({
+      next: (audit) => this.selectedAuditParticipant.set(audit),
+      error: (err) => alert(err.error?.message || 'Could not load contestant audit breakdown.')
+    });
+  }
+
+  public closeAuditModal(): void {
+    this.selectedAuditParticipant.set(null);
+  }
+
   public onTerminateSession(): void {
-    if (!confirm('Are you sure you want to end & terminate this live session? All connected contestant devices will transition to their final celebration podium. Complete audit logs and CSV export will be preserved.')) {
+    if (!confirm('Are you sure you want to end & terminate this live session? All connected contestant devices will transition to their final celebration podium. Complete audit logs and CSV/Excel export will be preserved.')) {
       return;
     }
     this.isActionLoading.set(true);
@@ -1062,6 +1199,20 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         window.URL.revokeObjectURL(url);
       },
       error: (err) => alert('Failed to export CSV results.')
+    });
+  }
+
+  public exportExcel(): void {
+    this.adminApi.exportExcel(this.sessionId).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Quiz_Results_${this.session()?.sessionCode || 'session'}.xlsx`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      },
+      error: (err) => alert('Failed to export Excel results.')
     });
   }
 

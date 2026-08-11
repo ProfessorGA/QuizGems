@@ -64,3 +64,33 @@ public class SessionListItemDto
     public int ParticipantCount { get; set; }
     public DateTime CreatedAt { get; set; }
 }
+
+public class ParticipantAuditDto
+{
+    public Guid ParticipantId { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string? PreviousFullName { get; set; }
+    public bool HasRenamed { get; set; }
+    public bool IsConnected { get; set; }
+    public int TotalScore { get; set; }
+    public int Rank { get; set; }
+    public int TotalCorrect { get; set; }
+    public int TotalFastest { get; set; }
+    public double TotalResponseSeconds { get; set; }
+    public DateTime JoinedAt { get; set; }
+    public string JoinedAtIst { get; set; } = string.Empty;
+    public List<ParticipantQuestionAuditDto> QuestionBreakdown { get; set; } = new();
+}
+
+public class ParticipantQuestionAuditDto
+{
+    public int QuestionNumber { get; set; }
+    public int? SelectedOption { get; set; }
+    public int? CorrectOption { get; set; }
+    public bool IsCorrect { get; set; }
+    public bool IsFastest { get; set; }
+    public int PointsAwarded { get; set; }
+    public double? ResponseSeconds { get; set; }
+    public DateTime? SubmittedAtUtc { get; set; }
+    public string SubmittedAtIst { get; set; } = string.Empty;
+}

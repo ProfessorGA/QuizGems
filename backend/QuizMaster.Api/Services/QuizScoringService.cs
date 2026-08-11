@@ -10,7 +10,9 @@ public interface IQuizScoringService
     Task<QuestionResultHubDto> ScoreQuestionAsync(QuizSession session, QuizQuestion question, int correctOption, CancellationToken ct = default);
     Task<List<ScoreboardEntryDto>> GetLiveScoreboardAsync(Guid sessionId, CancellationToken ct = default);
     Task<FinalScoreboardDto> GetFinalScoreboardAsync(Guid sessionId, CancellationToken ct = default);
+    Task<ParticipantAuditDto> GetParticipantAuditAsync(Guid sessionId, Guid participantId, CancellationToken ct = default);
     Task<byte[]> ExportResultsCsvAsync(Guid sessionId, CancellationToken ct = default);
+    Task<byte[]> ExportResultsExcelAsync(Guid sessionId, CancellationToken ct = default);
 }
 
 public class QuizScoringService : IQuizScoringService
@@ -321,5 +323,161 @@ public class QuizScoringService : IQuizScoringService
         Buffer.BlockCopy(preamble, 0, result, 0, preamble.Length);
         Buffer.BlockCopy(data, 0, result, preamble.Length, data.Length);
         return result;
+    }
+
+    public async Task<ParticipantAuditDto> GetParticipantAuditAsync(Guid sessionId, Guid participantId, CancellationToken ct = default)
+    {
+        var session = await _repository.GetSessionByIdAsync(sessionId, ct)
+            ?? throw new KeyNotFoundException("Session not found");
+
+        var participant = await _repository.GetParticipantByIdAsync(participantId, ct)
+            ?? throw new KeyNotFoundException("Participant not found");
+
+        var questions = await _repository.GetQuestionsBySessionIdAsync(sessionId, ct);
+        var answers = await _repository.GetAnswersForSessionAsync(sessionId, ct);
+
+        var participantAnswers = answers.Where(a => a.ParticipantId == participantId).ToDictionary(a => a.QuestionId);
+
+        var totalCorrect = answers.Count(a => a.ParticipantId == participantId && a.IsCorrect == true);
+        var totalFastest = answers.Count(a => a.ParticipantId == participantId && a.IsFastest);
+        var totalResponseMs = answers.Where(a => a.ParticipantId == participantId && a.IsCorrect == true).Sum(a => a.ResponseMilliseconds);
+
+        var joinedIst = participant.JoinedAt.AddHours(5).AddMinutes(30);
+
+        var breakdown = new List<ParticipantQuestionAuditDto>();
+
+        foreach (var q in questions.OrderBy(q => q.QuestionNumber))
+        {
+            if (participantAnswers.TryGetValue(q.Id, out var ans))
+            {
+                var ansIst = ans.ServerReceivedAt.AddHours(5).AddMinutes(30);
+                breakdown.Add(new ParticipantQuestionAuditDto
+                {
+                    QuestionNumber = q.QuestionNumber,
+                    SelectedOption = ans.SelectedOption,
+                    CorrectOption = q.CorrectOption,
+                    IsCorrect = ans.IsCorrect ?? false,
+                    IsFastest = ans.IsFastest,
+                    PointsAwarded = ans.PointsAwarded,
+                    ResponseSeconds = Math.Round(ans.ResponseMilliseconds / 1000.0, 3),
+                    SubmittedAtUtc = ans.ServerReceivedAt,
+                    SubmittedAtIst = $"{ansIst:yyyy-MM-dd HH:mm:ss.fff} IST"
+                });
+            }
+            else
+            {
+                breakdown.Add(new ParticipantQuestionAuditDto
+                {
+                    QuestionNumber = q.QuestionNumber,
+                    SelectedOption = null,
+                    CorrectOption = q.CorrectOption,
+                    IsCorrect = false,
+                    IsFastest = false,
+                    PointsAwarded = 0,
+                    ResponseSeconds = null,
+                    SubmittedAtUtc = null,
+                    SubmittedAtIst = "No submission"
+                });
+            }
+        }
+
+        return new ParticipantAuditDto
+        {
+            ParticipantId = participant.Id,
+            FullName = participant.FullName,
+            PreviousFullName = participant.PreviousFullName,
+            HasRenamed = participant.HasRenamed,
+            IsConnected = participant.IsConnected,
+            TotalScore = participant.TotalScore,
+            Rank = participant.Rank,
+            TotalCorrect = totalCorrect,
+            TotalFastest = totalFastest,
+            TotalResponseSeconds = Math.Round(totalResponseMs / 1000.0, 2),
+            JoinedAt = participant.JoinedAt,
+            JoinedAtIst = $"{joinedIst:yyyy-MM-dd HH:mm:ss} IST",
+            QuestionBreakdown = breakdown
+        };
+    }
+
+    public async Task<byte[]> ExportResultsExcelAsync(Guid sessionId, CancellationToken ct = default)
+    {
+        var session = await _repository.GetSessionByIdAsync(sessionId, ct);
+        if (session == null) throw new KeyNotFoundException("Session not found");
+
+        var leaderboard = await GetLiveScoreboardAsync(sessionId, ct);
+        var answers = await _repository.GetAnswersForSessionAsync(sessionId, ct);
+
+        using var workbook = new ClosedXML.Excel.XLWorkbook();
+
+        // Sheet 1: Leaderboard Standings
+        var wsLeaderboard = workbook.Worksheets.Add("Final Standings");
+        wsLeaderboard.Cell(1, 1).Value = "PHYSICAL QUIZ ARENA - OFFICIAL FINAL STANDINGS";
+        wsLeaderboard.Cell(1, 1).Style.Font.Bold = true;
+        wsLeaderboard.Cell(1, 1).Style.Font.FontSize = 14;
+
+        wsLeaderboard.Cell(2, 1).Value = $"Session: {session.SessionName} ({session.SessionCode})";
+        wsLeaderboard.Cell(3, 1).Value = $"Generated: {DateTime.UtcNow.AddHours(5).AddMinutes(30):yyyy-MM-dd HH:mm:ss} IST";
+
+        string[] lbHeaders = { "Rank", "Contestant Name", "Original Name", "Total Score (PTS)", "Correct Answers", "Fastest Finger Wins", "Total Time (s)", "Status" };
+        for (int i = 0; i < lbHeaders.Length; i++)
+        {
+            var cell = wsLeaderboard.Cell(5, i + 1);
+            cell.Value = lbHeaders[i];
+            cell.Style.Font.Bold = true;
+            cell.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.FromArgb(99, 102, 241);
+            cell.Style.Font.FontColor = ClosedXML.Excel.XLColor.White;
+        }
+
+        int lbRow = 6;
+        foreach (var p in leaderboard)
+        {
+            wsLeaderboard.Cell(lbRow, 1).Value = p.Rank;
+            wsLeaderboard.Cell(lbRow, 2).Value = p.FullName;
+            wsLeaderboard.Cell(lbRow, 3).Value = p.PreviousFullName ?? "-";
+            wsLeaderboard.Cell(lbRow, 4).Value = p.TotalScore;
+            wsLeaderboard.Cell(lbRow, 5).Value = p.CorrectAnswersCount;
+            wsLeaderboard.Cell(lbRow, 6).Value = p.FastestWinsCount;
+            wsLeaderboard.Cell(lbRow, 7).Value = p.TotalResponseSeconds;
+            wsLeaderboard.Cell(lbRow, 8).Value = p.Status;
+            lbRow++;
+        }
+        wsLeaderboard.Columns().AdjustToContents();
+
+        // Sheet 2: Verifiable Audit Trail
+        var wsAudit = workbook.Worksheets.Add("Verifiable Audit Log");
+        wsAudit.Cell(1, 1).Value = "QUESTION-BY-QUESTION SUBMISSION AUDIT LOG";
+        wsAudit.Cell(1, 1).Style.Font.Bold = true;
+        wsAudit.Cell(1, 1).Style.Font.FontSize = 14;
+
+        string[] auditHeaders = { "Question #", "Contestant Name", "Option Selected", "Correct Option", "Result", "Points Awarded", "Response Time (s)", "Fastest Bonus", "Timestamp IST" };
+        for (int i = 0; i < auditHeaders.Length; i++)
+        {
+            var cell = wsAudit.Cell(3, i + 1);
+            cell.Value = auditHeaders[i];
+            cell.Style.Font.Bold = true;
+            cell.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.FromArgb(16, 185, 129);
+            cell.Style.Font.FontColor = ClosedXML.Excel.XLColor.White;
+        }
+
+        int auditRow = 4;
+        foreach (var a in answers.OrderBy(x => x.Question.QuestionNumber).ThenBy(x => x.ResponseMilliseconds))
+        {
+            var aIst = a.ServerReceivedAt.AddHours(5).AddMinutes(30);
+            wsAudit.Cell(auditRow, 1).Value = a.Question.QuestionNumber;
+            wsAudit.Cell(auditRow, 2).Value = a.Participant?.FullName ?? "Contestant";
+            wsAudit.Cell(auditRow, 3).Value = $"Option {a.SelectedOption}";
+            wsAudit.Cell(auditRow, 4).Value = a.Question.CorrectOption.HasValue ? $"Option {a.Question.CorrectOption.Value}" : "-";
+            wsAudit.Cell(auditRow, 5).Value = a.IsCorrect == true ? "CORRECT" : (a.IsCorrect == false ? "WRONG" : "PENDING");
+            wsAudit.Cell(auditRow, 6).Value = a.PointsAwarded;
+            wsAudit.Cell(auditRow, 7).Value = Math.Round(a.ResponseMilliseconds / 1000.0, 3);
+            wsAudit.Cell(auditRow, 8).Value = a.IsFastest ? "YES (+5)" : "NO";
+            wsAudit.Cell(auditRow, 9).Value = $"{aIst:yyyy-MM-dd HH:mm:ss.fff}";
+            auditRow++;
+        }
+        wsAudit.Columns().AdjustToContents();
+
+        using var ms = new MemoryStream();
+        workbook.SaveAs(ms);
+        return ms.ToArray();
     }
 }
