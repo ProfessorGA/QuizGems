@@ -384,11 +384,16 @@ import {
                 <div class="d-flex align-items-center gap-3">
                   <div class="rank-circle fw-bold">{{ entry.rank }}</div>
                   <div>
-                    <strong class="contestant-name text-white d-block text-truncate" style="max-width: 170px;">
-                      {{ entry.fullName }}
-                    </strong>
+                    <div class="d-flex align-items-center gap-2">
+                      <strong class="contestant-name text-white d-block text-truncate" style="max-width: 160px;">
+                        {{ entry.fullName }}
+                      </strong>
+                      <span class="badge" [ngClass]="entry.isConnected ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'" style="font-size: 0.6rem;">
+                        {{ entry.status || (entry.isConnected ? 'Active' : 'Disconnected') }}
+                      </span>
+                    </div>
                     <span class="text-secondary" style="font-size: 0.7rem;">
-                      {{ entry.correctAnswersCount }} correct • {{ entry.fastestWinsCount }} ⚡ fastest
+                      {{ entry.correctAnswersCount }} correct • {{ entry.fastestWinsCount }} ⚡ • ⏱️ {{ entry.totalResponseSeconds || 0 }}s total
                     </span>
                   </div>
                 </div>
@@ -821,6 +826,9 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         this.session.set({ ...s, status: SessionStatus.Completed });
       }
       this.sound.playFastestFanfare();
+      setTimeout(() => {
+        this.exportCsv();
+      }, 1500);
     });
   }
 

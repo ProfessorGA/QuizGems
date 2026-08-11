@@ -8,7 +8,9 @@ public class ScoreboardEntryDto
     public int TotalScore { get; set; }
     public int CorrectAnswersCount { get; set; }
     public int FastestWinsCount { get; set; }
+    public double TotalResponseSeconds { get; set; }
     public bool IsConnected { get; set; }
+    public string Status { get; set; } = "Active";
 }
 
 public class FinalScoreboardDto

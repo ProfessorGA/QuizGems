@@ -59,12 +59,17 @@ public class QuizScoringService : IQuizScoringService
             wrong.PointsAwarded = 0;
         }
 
-        // Process correct answers & identify fastest
+        // Process correct answers & award speed-scaled points
         FastestParticipantDto? fastestDto = null;
+        var durationMs = (session.QuestionDurationSeconds > 0 ? session.QuestionDurationSeconds : 15) * 1000.0;
+
         for (int i = 0; i < correctAnswers.Count; i++)
         {
             var correct = correctAnswers[i];
             correct.IsCorrect = true;
+
+            // Scaled time bonus (1 to 5 points based on speed within duration)
+            var speedBonus = (int)Math.Max(1, Math.Round(5.0 * (1.0 - Math.Min(1.0, correct.ResponseMilliseconds / durationMs))));
 
             if (i == 0)
             {
@@ -82,7 +87,7 @@ public class QuizScoringService : IQuizScoringService
             else
             {
                 correct.IsFastest = false;
-                correct.PointsAwarded = session.CorrectAnswerPoints;
+                correct.PointsAwarded = session.CorrectAnswerPoints + speedBonus;
             }
         }
 
@@ -95,14 +100,20 @@ public class QuizScoringService : IQuizScoringService
             .GroupBy(a => a.ParticipantId)
             .ToDictionary(g => g.Key, g => g.Sum(a => a.PointsAwarded));
 
+        var participantResponseTimes = allSessionAnswers
+            .Where(a => a.IsCorrect == true)
+            .GroupBy(a => a.ParticipantId)
+            .ToDictionary(g => g.Key, g => g.Sum(a => a.ResponseMilliseconds));
+
         foreach (var participant in participants)
         {
             participant.TotalScore = scoresByParticipant.TryGetValue(participant.Id, out var totalScore) ? totalScore : 0;
         }
 
-        // Recalculate ranks
+        // Recalculate ranks (Tie-break by total response time, then join time)
         var orderedParticipants = participants
             .OrderByDescending(p => p.TotalScore)
+            .ThenBy(p => participantResponseTimes.TryGetValue(p.Id, out var t) ? t : double.MaxValue)
             .ThenBy(p => p.JoinedAt)
             .ToList();
 
@@ -176,8 +187,14 @@ public class QuizScoringService : IQuizScoringService
             .GroupBy(a => a.ParticipantId)
             .ToDictionary(g => g.Key, g => g.Count());
 
+        var totalResponseTimes = answers
+            .Where(a => a.IsCorrect == true)
+            .GroupBy(a => a.ParticipantId)
+            .ToDictionary(g => g.Key, g => g.Sum(a => a.ResponseMilliseconds));
+
         var leaderboard = participants
             .OrderByDescending(p => p.TotalScore)
+            .ThenBy(p => totalResponseTimes.TryGetValue(p.Id, out var t) ? t : double.MaxValue)
             .ThenByDescending(p => fastestCounts.TryGetValue(p.Id, out var f) ? f : 0)
             .ThenBy(p => p.JoinedAt)
             .Select((p, index) => new ScoreboardEntryDto
@@ -188,7 +205,9 @@ public class QuizScoringService : IQuizScoringService
                 TotalScore = p.TotalScore,
                 CorrectAnswersCount = correctCounts.TryGetValue(p.Id, out var c) ? c : 0,
                 FastestWinsCount = fastestCounts.TryGetValue(p.Id, out var f) ? f : 0,
-                IsConnected = p.IsConnected
+                TotalResponseSeconds = Math.Round((totalResponseTimes.TryGetValue(p.Id, out var t) ? t : 0) / 1000.0, 2),
+                IsConnected = p.IsConnected,
+                Status = p.IsConnected ? "Active" : "Disconnected"
             })
             .ToList();
 

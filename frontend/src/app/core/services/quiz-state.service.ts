@@ -63,6 +63,23 @@ export class QuizStateService {
   ) {
     this.restoreSessionFromStorage();
     this.subscribeToRealtimeEvents();
+    this.initVisibilityListeners();
+  }
+
+  private initVisibilityListeners(): void {
+    if (typeof window !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          this.syncWithServerState();
+        }
+      });
+      window.addEventListener('focus', () => {
+        this.syncWithServerState();
+      });
+      window.addEventListener('online', () => {
+        this.syncWithServerState();
+      });
+    }
   }
 
   public getQueryParams(): { code: string; id: string } {
@@ -140,22 +157,53 @@ export class QuizStateService {
         // Sync question state
         const isQuestionVoting = state.currentQuestionStatus === QuestionStatus.Voting ||
                                 (state.currentQuestionStatus as any) === 1 ||
-                                (state.currentQuestionStatus as any) === 'Voting';
+                                (state.currentQuestionStatus as any) === 'Voting' ||
+                                state.sessionStatus === SessionStatus.Voting;
 
         if (isQuestionVoting) {
           this.isVotingOpen.set(true);
           this.durationSeconds.set(state.durationSeconds || 15);
 
+          // Calculate remaining seconds if votingEndsAt is provided
+          let remaining = state.durationSeconds || 15;
+          if (state.votingEndsAt) {
+            const endsAtMs = new Date(state.votingEndsAt).getTime();
+            const nowMs = Date.now();
+            if (endsAtMs > nowMs) {
+              remaining = Math.max(1, Math.ceil((endsAtMs - nowMs) / 1000));
+            } else {
+              remaining = 0;
+            }
+          }
+
           if (state.hasSubmittedAnswer) {
             this.hasSubmitted.set(true);
             this.selectedOption.set(state.submittedOption || null);
             this.navigateParticipant('submitted');
-          } else {
+          } else if (remaining > 0) {
             this.hasSubmitted.set(false);
             this.selectedOption.set(null);
-            this.startCountdownTimer(state.durationSeconds || 15);
+            this.startCountdownTimer(remaining);
             this.navigateParticipant('voting');
+          } else {
+            this.isVotingOpen.set(false);
+            this.navigateParticipant('waiting');
           }
+        } else if (state.correctOption != null || state.sessionStatus === SessionStatus.AnswerReveal) {
+          if (state.correctOption != null) {
+            this.revealedCorrectOption.set(state.correctOption);
+          }
+          if (state.submittedOption != null) {
+            this.selectedOption.set(state.submittedOption);
+          }
+          if (state.isCorrect != null) {
+            this.myOutcome.set({
+              isCorrect: state.isCorrect,
+              isFastest: state.isFastest,
+              pointsEarned: state.pointsAwarded
+            });
+          }
+          this.navigateParticipant('result');
         } else if (state.sessionStatus === SessionStatus.Completed) {
           this.navigateParticipant('result');
         } else {

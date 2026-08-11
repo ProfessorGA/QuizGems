@@ -4,6 +4,7 @@ import { RouterModule } from '@angular/router';
 import { ConnectionBadgeComponent } from '../connection-badge/connection-badge.component';
 import { SoundService } from '../../../core/services/sound.service';
 import { QuizStateService } from '../../../core/services/quiz-state.service';
+import { ThemeService } from '../../../core/services/theme.service';
 
 @Component({
   selector: 'app-navbar',
@@ -36,6 +37,16 @@ import { QuizStateService } from '../../../core/services/quiz-state.service';
           <!-- Right Actions -->
           <div class="d-flex align-items-center gap-2 gap-md-3">
             <app-connection-badge></app-connection-badge>
+
+            <!-- Theme switcher button -->
+            <button 
+              class="btn-icon" 
+              (click)="theme.toggleTheme()" 
+              [title]="theme.isLight() ? 'Switch to Dark Theme' : 'Switch to Light Theme'"
+              aria-label="Toggle Theme"
+            >
+              <i class="bi" [ngClass]="theme.isLight() ? 'bi-moon-stars-fill text-indigo' : 'bi-sun-fill text-warning'"></i>
+            </button>
 
             <!-- Sound toggle button -->
             <button 
@@ -153,5 +164,9 @@ import { QuizStateService } from '../../../core/services/quiz-state.service';
   `]
 })
 export class NavbarComponent {
-  constructor(public sound: SoundService, public state: QuizStateService) {}
+  constructor(
+    public sound: SoundService, 
+    public state: QuizStateService,
+    public theme: ThemeService
+  ) {}
 }

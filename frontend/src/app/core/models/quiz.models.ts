@@ -216,7 +216,9 @@ export interface ScoreboardEntryDto {
   totalScore: number;
   correctAnswersCount: number;
   fastestWinsCount: number;
+  totalResponseSeconds?: number;
   isConnected: boolean;
+  status?: string;
 }
 
 export interface FastestResponseHighlightDto {

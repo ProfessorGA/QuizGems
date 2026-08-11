@@ -137,13 +137,13 @@ public class ScoringAndVotingTests
         Assert.Equal(1, entryAlen.CorrectAnswersCount);
         Assert.Equal(1, entryAlen.FastestWinsCount);
 
-        // Rahul: 10 Points
+        // Rahul: 13 Points (10 + 3 speed bonus)
         var entryRahul = leaderboard.First(e => e.ParticipantId == pRahul.Id);
-        Assert.Equal(10, entryRahul.TotalScore);
+        Assert.Equal(13, entryRahul.TotalScore);
 
-        // Anu: 10 Points
+        // Anu: 13 Points (10 + 3 speed bonus)
         var entryAnu = leaderboard.First(e => e.ParticipantId == pAnu.Id);
-        Assert.Equal(10, entryAnu.TotalScore);
+        Assert.Equal(13, entryAnu.TotalScore);
 
         // Sidharth: 0 Points
         var entrySidharth = leaderboard.First(e => e.ParticipantId == pSidharth.Id);

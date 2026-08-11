@@ -88,12 +88,29 @@ import { ConnectionBadgeComponent } from '../../../shared/components/connection-
           <h1 class="h3 fw-bold text-white mb-1">{{ outcomeTitle }}</h1>
           <p class="small mb-4" [ngClass]="outcomeSubtitleClass">{{ outcomeSubtitle }}</p>
 
-          <!-- Correct Option Card -->
-          <div class="correct-option-box p-3 rounded-4 mb-4">
-            <span class="text-secondary small fw-bold text-uppercase d-block mb-1">CORRECT ANSWER</span>
-            <h2 class="correct-option-text mb-0">
-              OPTION {{ state.revealedCorrectOption() || state.latestResult()?.correctOption }}
-            </h2>
+          <!-- Side-by-Side Answer Comparison Cards -->
+          <div class="row g-2 mb-4">
+            <div class="col-6">
+              <div class="p-3 rounded-4 h-100" [ngClass]="state.myOutcome()?.isCorrect ? 'bg-success-subtle border border-success' : 'bg-danger-subtle border border-danger'">
+                <span class="text-secondary small fw-bold text-uppercase d-block mb-1">YOUR CHOICE</span>
+                <strong class="fs-5 d-block" [ngClass]="state.myOutcome()?.isCorrect ? 'text-success' : 'text-danger'">
+                  {{ state.selectedOption() ? 'OPTION ' + state.selectedOption() : 'NO ANSWER' }}
+                </strong>
+                <span class="small fw-bold" [ngClass]="state.myOutcome()?.isCorrect ? 'text-success' : 'text-danger'">
+                  {{ state.myOutcome()?.isCorrect ? '✓ MATCHED' : (state.selectedOption() ? '✗ INCORRECT' : '⏱️ TIMED OUT') }}
+                </span>
+              </div>
+            </div>
+
+            <div class="col-6">
+              <div class="correct-option-box p-3 rounded-4 h-100">
+                <span class="text-secondary small fw-bold text-uppercase d-block mb-1">CORRECT OPTION</span>
+                <strong class="correct-option-text fs-5 d-block">
+                  OPTION {{ state.revealedCorrectOption() || state.latestResult()?.correctOption }}
+                </strong>
+                <span class="small text-emerald fw-bold">OFFICIAL ANSWER</span>
+              </div>
+            </div>
           </div>
 
           <!-- Live Score, Time, and Current Rank -->
