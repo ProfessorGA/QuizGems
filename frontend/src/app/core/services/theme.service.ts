@@ -6,7 +6,7 @@ export type AppTheme = 'light' | 'dark';
   providedIn: 'root'
 })
 export class ThemeService {
-  public currentTheme = signal<AppTheme>('light');
+  public currentTheme = signal<AppTheme>('dark');
 
   constructor() {
     this.initTheme();
@@ -15,8 +15,8 @@ export class ThemeService {
   private initTheme(): void {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('qm_theme') as AppTheme;
-      // Default to 'light' as requested
-      const theme: AppTheme = saved === 'dark' ? 'dark' : 'light';
+      // Default to 'dark'
+      const theme: AppTheme = saved === 'light' ? 'light' : 'dark';
       this.setTheme(theme);
     }
   }

@@ -202,6 +202,8 @@ public class QuizScoringService : IQuizScoringService
                 Rank = index + 1,
                 ParticipantId = p.Id,
                 FullName = p.FullName,
+                PreviousFullName = p.PreviousFullName,
+                HasRenamed = p.HasRenamed,
                 TotalScore = p.TotalScore,
                 CorrectAnswersCount = correctCounts.TryGetValue(p.Id, out var c) ? c : 0,
                 FastestWinsCount = fastestCounts.TryGetValue(p.Id, out var f) ? f : 0,

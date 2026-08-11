@@ -526,6 +526,8 @@ public class QuizSessionManager : IQuizSessionManager
         {
             ParticipantId = participant.Id,
             FullName = participant.FullName,
+            PreviousFullName = participant.PreviousFullName,
+            HasRenamed = participant.HasRenamed,
             SessionCode = session.SessionCode,
             SessionName = session.SessionName,
             SessionStatus = session.Status,
