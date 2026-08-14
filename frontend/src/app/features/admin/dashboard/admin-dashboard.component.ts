@@ -5,6 +5,7 @@ import { ActivatedRoute, RouterModule, Router } from '@angular/router';
 import { AdminApiService } from '../../../core/services/admin-api.service';
 import { QuizSignalRService } from '../../../core/services/quiz-signalr.service';
 import { SoundService } from '../../../core/services/sound.service';
+import { AlertService } from '../../../core/services/alert.service';
 import { TimerDisplayComponent } from '../../../shared/components/timer-display/timer-display.component';
 import { ConnectionBadgeComponent } from '../../../shared/components/connection-badge/connection-badge.component';
 import {
@@ -176,9 +177,14 @@ import {
                 </div>
               </div>
 
-              <button class="btn btn-outline-danger px-4 py-2 rounded-3 fw-bold" (click)="onEndVotingEarly()" [disabled]="isActionLoading()">
-                <i class="bi bi-stop-circle-fill me-1"></i>End Voting Early
-              </button>
+              <div class="d-flex align-items-center justify-content-center gap-2 mt-3">
+                <button class="btn btn-outline-danger px-4 py-2 rounded-3 fw-bold" (click)="onEndVotingEarly()" [disabled]="isActionLoading()">
+                  <i class="bi bi-stop-circle-fill me-1"></i>End Voting Early
+                </button>
+                <button class="btn btn-outline-warning px-3 py-2 rounded-3 fw-bold" (click)="onCancelCurrentQuestion()" [disabled]="isActionLoading()" title="Cancel and void this question">
+                  <i class="bi bi-slash-circle me-1"></i>Void Question
+                </button>
+              </div>
 
             </div>
 
@@ -214,13 +220,20 @@ import {
               </div>
 
               <!-- Confirm Answer Button -->
-              <div class="text-center mt-4">
+              <div class="text-center mt-4 d-flex flex-column align-items-center gap-2">
                 <button 
                   class="btn btn-primary-gradient px-5 py-3 rounded-3 fw-bold text-uppercase"
                   [disabled]="!selectedCorrectOption() || isActionLoading()"
                   (click)="onConfirmCorrectAnswer()"
                 >
                   <i class="bi bi-award-fill me-2"></i>CONFIRM & SCORE QUESTION
+                </button>
+                <button 
+                  class="btn btn-link text-warning text-decoration-none small"
+                  (click)="onCancelCurrentQuestion()"
+                  [disabled]="isActionLoading()"
+                >
+                  <i class="bi bi-slash-circle me-1"></i>Void / Cancel this Question
                 </button>
               </div>
 
@@ -282,7 +295,7 @@ import {
               </div>
 
               <!-- Action: Next Question or Complete -->
-              <div class="text-center">
+              <div class="text-center d-flex flex-column align-items-center gap-2">
                 <button 
                   *ngIf="session()!.currentQuestionNumber < session()!.totalQuestions"
                   class="btn btn-primary-gradient px-5 py-3 rounded-3 fw-bold text-uppercase"
@@ -300,6 +313,15 @@ import {
                   [disabled]="isActionLoading()"
                 >
                   <i class="bi bi-trophy-fill me-2"></i>COMPLETE QUIZ & SHOW PODIUM
+                </button>
+
+                <button 
+                  class="btn btn-outline-warning btn-sm px-3 py-1 rounded-3 fw-bold mt-1"
+                  (click)="onCancelCurrentQuestion()"
+                  [disabled]="isActionLoading()"
+                  title="Void this question and revert points"
+                >
+                  <i class="bi bi-arrow-counterclockwise me-1"></i>Void & Revert Question {{ session()?.currentQuestionNumber }}
                 </button>
               </div>
 
@@ -869,6 +891,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
     private router: Router,
     private adminApi: AdminApiService,
     private signalR: QuizSignalRService,
+    private alertService: AlertService,
     public sound: SoundService
   ) {}
 
@@ -937,7 +960,27 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         this.participants.set(updated);
       } else {
         this.participants.set([...current, p]);
+        this.alertService.info('Contestant Joined', `${p.fullName} entered the room.`);
       }
+    });
+
+    this.signalR.participantReentered$.subscribe(dto => {
+      this.alertService.moderate('Contestant Re-entered', dto.message, { icon: 'bi-person-check-fill' });
+      this.loadParticipants();
+      this.loadScoreboard();
+    });
+
+    this.signalR.questionCancelled$.subscribe(dto => {
+      this.stopCountdownTimer();
+      this.answeredCount.set(0);
+      this.selectedCorrectOption.set(null);
+      this.currentQuestionResult.set(null);
+      const s = this.session();
+      if (s) {
+        this.session.set({ ...s, status: SessionStatus.Waiting });
+      }
+      this.loadParticipants();
+      this.loadScoreboard();
     });
 
     this.signalR.participantDisconnected$.subscribe(({ participantId }) => {
@@ -1062,7 +1105,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.isActionLoading.set(false);
-        alert(err.error?.message || 'Failed to start voting.');
+        this.alertService.moderate('Voting Error', err.error?.message || 'Failed to start voting.');
       }
     });
   }
@@ -1073,7 +1116,42 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
       next: () => this.isActionLoading.set(false),
       error: (err) => {
         this.isActionLoading.set(false);
-        alert(err.error?.message || 'Failed to end voting.');
+        this.alertService.moderate('Voting Error', err.error?.message || 'Failed to end voting.');
+      }
+    });
+  }
+
+  public onCancelCurrentQuestion(): void {
+    const qNum = this.session()?.currentQuestionNumber || 1;
+    if (!confirm(`Are you sure you want to cancel and VOID Question #${qNum}? All contestant votes for this question will be wiped and awarded points reverted.`)) {
+      return;
+    }
+
+    this.isActionLoading.set(true);
+    this.adminApi.cancelCurrentQuestion(this.sessionId).subscribe({
+      next: (res) => {
+        this.isActionLoading.set(false);
+        this.stopCountdownTimer();
+        this.answeredCount.set(0);
+        this.selectedCorrectOption.set(null);
+        this.currentQuestionResult.set(null);
+
+        const s = this.session();
+        if (s) {
+          this.session.set({ ...s, status: SessionStatus.Waiting });
+        }
+
+        this.alertService.moderate(
+          'Question Voided',
+          `Question #${qNum} was cancelled. Contestant scores were reverted.`,
+          { icon: 'bi-slash-circle-fill' }
+        );
+        this.loadParticipants();
+        this.loadScoreboard();
+      },
+      error: (err) => {
+        this.isActionLoading.set(false);
+        this.alertService.emergency('Cancellation Failed', err.error?.message || 'Could not cancel question.');
       }
     });
   }
@@ -1095,7 +1173,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.isActionLoading.set(false);
-        alert(err.error?.message || 'Failed to score question.');
+        this.alertService.moderate('Scoring Error', err.error?.message || 'Failed to score question.');
       }
     });
   }
@@ -1106,7 +1184,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
       next: () => this.isActionLoading.set(false),
       error: (err) => {
         this.isActionLoading.set(false);
-        alert(err.error?.message || 'Failed to advance to next question.');
+        this.alertService.moderate('Next Question Error', err.error?.message || 'Failed to advance to next question.');
       }
     });
   }
@@ -1120,7 +1198,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.isActionLoading.set(false);
-        alert(err.error?.message || 'Failed to complete quiz.');
+        this.alertService.moderate('Completion Error', err.error?.message || 'Failed to complete quiz.');
       }
     });
   }
@@ -1142,11 +1220,11 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         if (s) {
           this.session.set({ ...s, status: SessionStatus.Waiting, currentQuestionNumber: 1 });
         }
-        alert(res.message || 'Quiz restarted from Question 1. All contestants remain in the room with 0 points.');
+        this.alertService.moderate('Quiz Restarted', res.message || 'Quiz restarted from Question 1. All contestants remain in the room with 0 points.');
       },
       error: (err) => {
         this.isActionLoading.set(false);
-        alert(err.error?.message || 'Failed to restart quiz.');
+        this.alertService.emergency('Restart Failed', err.error?.message || 'Failed to restart quiz.');
       }
     });
   }
@@ -1158,7 +1236,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   public onOpenParticipantAudit(participantId: string): void {
     this.adminApi.getParticipantAudit(this.sessionId, participantId).subscribe({
       next: (audit) => this.selectedAuditParticipant.set(audit),
-      error: (err) => alert(err.error?.message || 'Could not load contestant audit breakdown.')
+      error: (err) => this.alertService.moderate('Audit Error', err.error?.message || 'Could not load contestant audit breakdown.')
     });
   }
 
@@ -1180,10 +1258,11 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
           this.session.set({ ...s, status: SessionStatus.Completed });
         }
         this.sound.playFastestFanfare();
+        this.alertService.emergency('Session Terminated', 'The live competition has been concluded and participants moved to the podium.');
       },
       error: (err) => {
         this.isActionLoading.set(false);
-        alert(err.error?.message || 'Failed to terminate session.');
+        this.alertService.emergency('Termination Failed', err.error?.message || 'Failed to terminate session.');
       }
     });
   }
@@ -1197,8 +1276,9 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         a.download = `Quiz_Results_${this.session()?.sessionCode || 'session'}.csv`;
         a.click();
         window.URL.revokeObjectURL(url);
+        this.alertService.info('CSV Exported', 'Official competition CSV audit downloaded.');
       },
-      error: (err) => alert('Failed to export CSV results.')
+      error: (err) => this.alertService.moderate('Export Error', 'Failed to export CSV results.')
     });
   }
 
@@ -1211,8 +1291,9 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         a.download = `Quiz_Results_${this.session()?.sessionCode || 'session'}.xlsx`;
         a.click();
         window.URL.revokeObjectURL(url);
+        this.alertService.info('Excel Exported', 'Official competition Excel .xlsx workbook downloaded.');
       },
-      error: (err) => alert('Failed to export Excel results.')
+      error: (err) => this.alertService.moderate('Export Error', 'Failed to export Excel results.')
     });
   }
 
@@ -1226,7 +1307,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         this.showDeleteModal.set(false);
         this.router.navigate(['/admin/sessions']);
       },
-      error: (err) => alert('Failed to delete session.')
+      error: (err) => this.alertService.emergency('Delete Error', 'Failed to delete session.')
     });
   }
 
@@ -1263,10 +1344,11 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         this.participants.set(this.participants().filter(x => x.id !== p.id));
         this.selectedParticipantIds.set(this.selectedParticipantIds().filter(x => x !== p.id));
         this.loadScoreboard();
+        this.alertService.moderate('Contestant Removed', `Removed ${p.fullName} from competition.`);
       },
       error: (err) => {
         this.isActionLoading.set(false);
-        alert(err.error?.message || 'Failed to remove contestant.');
+        this.alertService.moderate('Action Failed', err.error?.message || 'Failed to remove contestant.');
       }
     });
   }
@@ -1286,11 +1368,11 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         this.participants.set(this.participants().filter(x => !ids.includes(x.id)));
         this.selectedParticipantIds.set([]);
         this.loadScoreboard();
-        alert(res.message || 'Selected contestants removed.');
+        this.alertService.moderate('Group Eviction', res.message || 'Selected contestants removed.');
       },
       error: (err) => {
         this.isActionLoading.set(false);
-        alert(err.error?.message || 'Failed to remove selected contestants.');
+        this.alertService.moderate('Action Failed', err.error?.message || 'Failed to remove selected contestants.');
       }
     });
   }
@@ -1298,7 +1380,7 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   public onKickDisconnected(): void {
     const inactive = this.participants().filter(p => !p.isConnected);
     if (inactive.length === 0) {
-      alert('No inactive or disconnected contestants found.');
+      this.alertService.info('No Inactive Contestants', 'No inactive or disconnected contestants found.');
       return;
     }
 
@@ -1314,10 +1396,11 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
         this.participants.set(this.participants().filter(p => p.isConnected));
         this.selectedParticipantIds.set(this.selectedParticipantIds().filter(id => !ids.includes(id)));
         this.loadScoreboard();
+        this.alertService.moderate('Disconnected Removed', 'Removed all inactive contestants.');
       },
       error: (err) => {
         this.isActionLoading.set(false);
-        alert(err.error?.message || 'Failed to remove inactive contestants.');
+        this.alertService.moderate('Action Failed', err.error?.message || 'Failed to remove inactive contestants.');
       }
     });
   }

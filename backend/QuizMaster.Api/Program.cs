@@ -240,7 +240,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<QuizHub>("/hubs/quiz");
-app.MapGet("/", () => Results.Ok(new { message = "Quiz Master Real-Time Physical Quiz Platform API is running.", version = "1.0.0", health = "/health" }));
+app.MapGet("/", () => Results.Ok(new { message = "Gems Quiz Real-Time Competition Platform API is running.", version = "1.0.0", health = "/health" }));
 
 app.Run();
 

@@ -18,11 +18,10 @@ import { ThemeService } from '../../../core/services/theme.service';
           <!-- Logo / Title -->
           <a routerLink="/" class="brand-logo text-decoration-none d-flex align-items-center gap-2">
             <div class="logo-icon">
-              <i class="bi bi-broadcast"></i>
+              <i class="bi bi-gem"></i>
             </div>
             <div class="brand-text">
-              <span class="brand-name">QUIZ MASTER</span>
-              <span class="brand-tag">PHYSICAL ARENA</span>
+              <span class="brand-name">GEMS QUIZ</span>
             </div>
           </a>
 

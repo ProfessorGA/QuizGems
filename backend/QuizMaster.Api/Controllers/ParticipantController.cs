@@ -58,6 +58,8 @@ public class ParticipantController : ControllerBase
         // Check if participant already registered
         var existingParticipant = await _repository.GetParticipantByNameAsync(session.Id, trimmedName);
         QuizParticipant participant;
+        bool isReentry = false;
+        string? reentryMessage = null;
 
         if (existingParticipant != null)
         {
@@ -66,6 +68,19 @@ public class ParticipantController : ControllerBase
             participant.IsConnected = true;
             participant.LastConnectedAt = DateTime.UtcNow;
             await _repository.UpdateParticipantAsync(participant);
+            isReentry = true;
+            reentryMessage = $"Re-entered active session as '{participant.FullName}'. Restoring your score ({participant.TotalScore} pts) and question state...";
+
+            // Notify Admin of participant re-entry
+            await _hubContext.Clients.Group($"admin_{normalizedCode}").ParticipantReentered(new ParticipantReentryHubDto
+            {
+                Id = participant.Id,
+                FullName = participant.FullName,
+                TotalScore = participant.TotalScore,
+                Rank = participant.Rank,
+                ReenteredAtUtc = DateTime.UtcNow,
+                Message = $"Contestant '{participant.FullName}' has re-connected/re-entered the session."
+            });
         }
         else
         {
@@ -78,18 +93,18 @@ public class ParticipantController : ControllerBase
                 LastConnectedAt = DateTime.UtcNow
             };
             await _repository.AddParticipantAsync(participant);
-        }
 
-        // Notify Admin of participant joined
-        await _hubContext.Clients.Group($"admin_{normalizedCode}").ParticipantJoined(new ParticipantHubDto
-        {
-            Id = participant.Id,
-            FullName = participant.FullName,
-            IsConnected = true,
-            TotalScore = participant.TotalScore,
-            Rank = participant.Rank,
-            HasAnsweredCurrentQuestion = false
-        });
+            // Notify Admin of new participant joined
+            await _hubContext.Clients.Group($"admin_{normalizedCode}").ParticipantJoined(new ParticipantHubDto
+            {
+                Id = participant.Id,
+                FullName = participant.FullName,
+                IsConnected = true,
+                TotalScore = participant.TotalScore,
+                Rank = participant.Rank,
+                HasAnsweredCurrentQuestion = false
+            });
+        }
 
         return Ok(new JoinSessionResponse
         {
@@ -98,6 +113,10 @@ public class ParticipantController : ControllerBase
             SessionCode = session.SessionCode,
             SessionName = session.SessionName,
             FullName = participant.FullName,
+            PreviousFullName = participant.PreviousFullName,
+            HasRenamed = participant.HasRenamed,
+            IsReentry = isReentry,
+            ReentryMessage = reentryMessage,
             SessionStatus = session.Status,
             CurrentQuestionNumber = session.CurrentQuestionNumber,
             TotalQuestions = session.TotalQuestions,

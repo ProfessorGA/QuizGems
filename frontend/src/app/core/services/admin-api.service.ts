@@ -14,7 +14,8 @@ import {
   QuestionResultHubDto,
   ScoreboardEntryDto,
   FinalScoreboardDto,
-  ParticipantAuditDto
+  ParticipantAuditDto,
+  QuestionCancelledHubDto
 } from '../models/quiz.models';
 
 @Injectable({
@@ -114,6 +115,14 @@ export class AdminApiService {
 
   bulkKickParticipants(sessionId: string, participantIds: string[], reason?: string): Observable<{ message: string }> {
     return this.http.post<{ message: string }>(`${this.baseUrl}/sessions/${sessionId}/participants/bulk-kick`, { participantIds, reason });
+  }
+
+  cancelCurrentQuestion(sessionId: string, reason?: string): Observable<QuestionCancelledHubDto> {
+    return this.http.post<QuestionCancelledHubDto>(`${this.baseUrl}/sessions/${sessionId}/cancel-current-question`, { reason });
+  }
+
+  cancelQuestion(sessionId: string, questionNumber: number, reason?: string): Observable<QuestionCancelledHubDto> {
+    return this.http.post<QuestionCancelledHubDto>(`${this.baseUrl}/sessions/${sessionId}/questions/${questionNumber}/cancel`, { reason });
   }
 
   deleteSession(id: string): Observable<{ message: string }> {

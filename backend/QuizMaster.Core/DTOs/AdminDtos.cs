@@ -31,6 +31,11 @@ public class SetCorrectAnswerRequest
     public int CorrectOption { get; set; } // 1, 2, 3, or 4
 }
 
+public class CancelQuestionRequest
+{
+    public string? Reason { get; set; }
+}
+
 public class SessionDetailDto
 {
     public Guid Id { get; set; }

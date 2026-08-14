@@ -14,7 +14,9 @@ import {
   NextQuestionHubDto,
   FinalScoreboardDto,
   SubmitAnswerResponse,
-  ParticipantStateDto
+  ParticipantStateDto,
+  QuestionCancelledHubDto,
+  ParticipantReentryHubDto
 } from '../models/quiz.models';
 
 export type ConnectionStatus = 'Connected' | 'Reconnecting' | 'Disconnected';
@@ -31,6 +33,7 @@ export class QuizSignalRService {
   public participantJoined$ = new Subject<ParticipantHubDto>();
   public participantDisconnected$ = new Subject<{ participantId: string; fullName: string }>();
   public participantReconnected$ = new Subject<{ participantId: string; fullName: string }>();
+  public participantReentered$ = new Subject<ParticipantReentryHubDto>();
   public participantRenamed$ = new Subject<{ participantId: string; newFullName: string; previousFullName: string }>();
   public participantKicked$ = new Subject<{ participantId: string; reason: string }>();
   public sessionStarted$ = new Subject<SessionStateHubDto>();
@@ -39,6 +42,7 @@ export class QuizSignalRService {
   public answerSubmitted$ = new Subject<AnswerSubmittedHubDto>();
   public answerRevealed$ = new Subject<AnswerRevealedHubDto>();
   public questionResult$ = new Subject<QuestionResultHubDto>();
+  public questionCancelled$ = new Subject<QuestionCancelledHubDto>();
   public scoreboardUpdated$ = new Subject<ScoreboardEntryDto[]>();
   public nextQuestion$ = new Subject<NextQuestionHubDto>();
   public quizCompleted$ = new Subject<FinalScoreboardDto>();
@@ -52,7 +56,7 @@ export class QuizSignalRService {
       return;
     }
 
-    const token = localStorage.getItem('qm_admin_token');
+    const token = sessionStorage.getItem('qm_admin_token') || localStorage.getItem('qm_admin_token');
     const hubUrl = environment.hubUrl.startsWith('http') 
       ? environment.hubUrl 
       : `${window.location.origin}${environment.hubUrl}`;
@@ -103,6 +107,7 @@ export class QuizSignalRService {
     this.hubConnection.on('ParticipantJoined', (dto: ParticipantHubDto) => this.participantJoined$.next(dto));
     this.hubConnection.on('ParticipantDisconnected', (participantId: string, fullName: string) => this.participantDisconnected$.next({ participantId, fullName }));
     this.hubConnection.on('ParticipantReconnected', (participantId: string, fullName: string) => this.participantReconnected$.next({ participantId, fullName }));
+    this.hubConnection.on('ParticipantReentered', (dto: ParticipantReentryHubDto) => this.participantReentered$.next(dto));
     this.hubConnection.on('ParticipantRenamed', (participantId: string, newFullName: string, previousFullName: string) => this.participantRenamed$.next({ participantId, newFullName, previousFullName }));
     this.hubConnection.on('ParticipantKicked', (participantId: string, reason: string) => this.participantKicked$.next({ participantId, reason }));
     this.hubConnection.on('SessionStarted', (dto: SessionStateHubDto) => this.sessionStarted$.next(dto));
@@ -111,6 +116,7 @@ export class QuizSignalRService {
     this.hubConnection.on('AnswerSubmitted', (dto: AnswerSubmittedHubDto) => this.answerSubmitted$.next(dto));
     this.hubConnection.on('AnswerRevealed', (dto: AnswerRevealedHubDto) => this.answerRevealed$.next(dto));
     this.hubConnection.on('QuestionResult', (dto: QuestionResultHubDto) => this.questionResult$.next(dto));
+    this.hubConnection.on('QuestionCancelled', (dto: QuestionCancelledHubDto) => this.questionCancelled$.next(dto));
     this.hubConnection.on('ScoreboardUpdated', (dto: ScoreboardEntryDto[]) => this.scoreboardUpdated$.next(dto));
     this.hubConnection.on('NextQuestion', (dto: NextQuestionHubDto) => this.nextQuestion$.next(dto));
     this.hubConnection.on('QuizCompleted', (dto: FinalScoreboardDto) => this.quizCompleted$.next(dto));

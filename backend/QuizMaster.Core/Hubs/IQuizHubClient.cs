@@ -15,6 +15,8 @@ public interface IQuizHubClient
     Task AnswerSubmitted(AnswerSubmittedHubDto notification);
     Task AnswerRevealed(AnswerRevealedHubDto reveal);
     Task QuestionResult(QuestionResultHubDto result);
+    Task QuestionCancelled(QuestionCancelledHubDto cancellation);
+    Task ParticipantReentered(ParticipantReentryHubDto reentry);
     Task ScoreboardUpdated(List<ScoreboardEntryDto> leaderboard);
     Task NextQuestion(NextQuestionHubDto nextQuestion);
     Task QuizCompleted(FinalScoreboardDto finalScoreboard);

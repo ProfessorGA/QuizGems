@@ -109,3 +109,21 @@ public class NextQuestionHubDto
     public int QuestionNumber { get; set; }
     public int TotalQuestions { get; set; }
 }
+
+public class QuestionCancelledHubDto
+{
+    public int QuestionNumber { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public List<ScoreboardEntryDto> UpdatedScoreboard { get; set; } = new();
+}
+
+public class ParticipantReentryHubDto
+{
+    public Guid Id { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public int TotalScore { get; set; }
+    public int Rank { get; set; }
+    public DateTime ReenteredAtUtc { get; set; }
+    public string Message { get; set; } = string.Empty;
+}

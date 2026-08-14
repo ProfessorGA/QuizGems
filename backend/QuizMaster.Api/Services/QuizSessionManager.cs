@@ -17,6 +17,7 @@ public interface IQuizSessionManager
     Task<QuestionResultHubDto> SetCorrectAnswerAsync(Guid sessionId, int correctOption, CancellationToken ct = default);
     Task<NextQuestionHubDto?> NextQuestionAsync(Guid sessionId, CancellationToken ct = default);
     Task<FinalScoreboardDto> CompleteQuizAsync(Guid sessionId, CancellationToken ct = default);
+    Task<QuestionCancelledHubDto> CancelQuestionAsync(Guid sessionId, int questionNumber, string? reason = null, CancellationToken ct = default);
     Task<SubmitAnswerResponse> SubmitAnswerAsync(string sessionCode, Guid participantId, int selectedOption, CancellationToken ct = default);
     Task<ParticipantStateDto> RenameParticipantAsync(string sessionCode, Guid participantId, string newFullName, CancellationToken ct = default);
     Task<ParticipantStateDto> GetParticipantStateAsync(string sessionCode, Guid participantId, CancellationToken ct = default);
@@ -366,6 +367,48 @@ public class QuizSessionManager : IQuizSessionManager
         await _hubContext.Clients.Group($"session_{session.SessionCode}").QuizCompleted(finalScoreboard);
 
         return finalScoreboard;
+    }
+
+    public async Task<QuestionCancelledHubDto> CancelQuestionAsync(Guid sessionId, int questionNumber, string? reason = null, CancellationToken ct = default)
+    {
+        // Cancel countdown timer if running
+        if (_activeTimers.TryRemove(sessionId, out var cts))
+        {
+            cts.Cancel();
+            cts.Dispose();
+        }
+
+        using var scope = _scopeFactory.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<IQuizRepository>();
+        var scoringService = scope.ServiceProvider.GetRequiredService<IQuizScoringService>();
+
+        var session = await repo.GetSessionByIdAsync(sessionId, ct)
+            ?? throw new KeyNotFoundException("Session not found");
+
+        var success = await repo.CancelQuestionAsync(sessionId, questionNumber, ct);
+        if (!success)
+        {
+            throw new KeyNotFoundException($"Question #{questionNumber} not found in session.");
+        }
+
+        var updatedScoreboard = await scoringService.GetLiveScoreboardAsync(sessionId, ct);
+        var reasonText = string.IsNullOrWhiteSpace(reason) ? "Host cancelled this question due to verification or adjustment." : reason.Trim();
+
+        var cancelDto = new QuestionCancelledHubDto
+        {
+            QuestionNumber = questionNumber,
+            Reason = reasonText,
+            Message = $"Question #{questionNumber} has been voided by the host. All submitted answers have been cleared and points reverted.",
+            UpdatedScoreboard = updatedScoreboard
+        };
+
+        // Broadcast to contestants and admin
+        await _hubContext.Clients.Group($"session_{session.SessionCode}").QuestionCancelled(cancelDto);
+        await _hubContext.Clients.Group($"admin_{session.SessionCode}").QuestionCancelled(cancelDto);
+        await _hubContext.Clients.Group($"session_{session.SessionCode}").ScoreboardUpdated(updatedScoreboard);
+        await _hubContext.Clients.Group($"admin_{session.SessionCode}").ScoreboardUpdated(updatedScoreboard);
+
+        return cancelDto;
     }
 
     public async Task<SubmitAnswerResponse> SubmitAnswerAsync(

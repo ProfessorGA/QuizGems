@@ -43,4 +43,5 @@ public interface IQuizRepository
     Task EnsureDatabaseCreatedAsync(CancellationToken ct = default);
     Task ClearParticipantsAndAnswersAsync(Guid sessionId, CancellationToken ct = default);
     Task RestartQuizSessionAsync(Guid sessionId, CancellationToken ct = default);
+    Task<bool> CancelQuestionAsync(Guid sessionId, int questionNumber, CancellationToken ct = default);
 }

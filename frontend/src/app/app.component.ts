@@ -2,14 +2,16 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { NavbarComponent } from './shared/components/navbar/navbar.component';
+import { AlertContainerComponent } from './shared/components/alert-container/alert-container.component';
 import { ThemeService } from './core/services/theme.service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, RouterModule, NavbarComponent],
+  imports: [CommonModule, RouterModule, NavbarComponent, AlertContainerComponent],
   template: `
     <div class="app-layout d-flex flex-column min-vh-100 justify-content-between">
+      <app-alert-container></app-alert-container>
       <div class="flex-grow-1">
         <app-navbar></app-navbar>
         <main>

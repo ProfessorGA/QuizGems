@@ -217,6 +217,45 @@ public class AdminSessionsController : ControllerBase
         }
     }
 
+    [HttpPost("{id:guid}/cancel-current-question")]
+    public async Task<ActionResult<QuestionCancelledHubDto>> CancelCurrentQuestion(Guid id, [FromBody] CancelQuestionRequest? request)
+    {
+        try
+        {
+            var session = await _repository.GetSessionByIdAsync(id);
+            if (session == null) return NotFound(new { message = "Session not found." });
+
+            var result = await _sessionManager.CancelQuestionAsync(id, session.CurrentQuestionNumber, request?.Reason);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Error cancelling question.", details = ex.Message });
+        }
+    }
+
+    [HttpPost("{id:guid}/questions/{questionNumber:int}/cancel")]
+    public async Task<ActionResult<QuestionCancelledHubDto>> CancelQuestion(Guid id, int questionNumber, [FromBody] CancelQuestionRequest? request)
+    {
+        try
+        {
+            var result = await _sessionManager.CancelQuestionAsync(id, questionNumber, request?.Reason);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Error cancelling question.", details = ex.Message });
+        }
+    }
+
     [HttpPost("{id:guid}/next-question")]
     public async Task<ActionResult> NextQuestion(Guid id)
     {

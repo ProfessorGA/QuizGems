@@ -81,6 +81,8 @@ export interface JoinSessionResponse {
   fullName: string;
   previousFullName?: string;
   hasRenamed?: boolean;
+  isReentry?: boolean;
+  reentryMessage?: string;
   sessionStatus: SessionStatus;
   currentQuestionNumber: number;
   totalQuestions: number;
@@ -286,4 +288,20 @@ export interface ParticipantQuestionAuditDto {
   responseSeconds?: number;
   submittedAtUtc?: string;
   submittedAtIst: string;
+}
+
+export interface QuestionCancelledHubDto {
+  questionNumber: number;
+  reason: string;
+  message: string;
+  updatedScoreboard: ScoreboardEntryDto[];
+}
+
+export interface ParticipantReentryHubDto {
+  id: string;
+  fullName: string;
+  totalScore: number;
+  rank: number;
+  reenteredAtUtc: string;
+  message: string;
 }

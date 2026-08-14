@@ -272,7 +272,7 @@ public class QuizScoringService : IQuizScoringService
 
         var csv = new StringBuilder();
         csv.AppendLine($"==========================================================================================");
-        csv.AppendLine($"  PHYSICAL QUIZ ARENA - OFFICIAL COMPETITION REPORT & AUDIT TRAIL");
+        csv.AppendLine($"  GEMS QUIZ - OFFICIAL COMPETITION REPORT & AUDIT TRAIL");
         csv.AppendLine($"==========================================================================================");
         csv.AppendLine($"Session Name: {session.SessionName}");
         csv.AppendLine($"Session Code: {session.SessionCode}");
@@ -411,7 +411,7 @@ public class QuizScoringService : IQuizScoringService
 
         // Sheet 1: Leaderboard Standings
         var wsLeaderboard = workbook.Worksheets.Add("Final Standings");
-        wsLeaderboard.Cell(1, 1).Value = "PHYSICAL QUIZ ARENA - OFFICIAL FINAL STANDINGS";
+        wsLeaderboard.Cell(1, 1).Value = "GEMS QUIZ - OFFICIAL FINAL STANDINGS";
         wsLeaderboard.Cell(1, 1).Style.Font.Bold = true;
         wsLeaderboard.Cell(1, 1).Style.Font.FontSize = 14;
 

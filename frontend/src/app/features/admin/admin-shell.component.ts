@@ -17,7 +17,7 @@ import { RouterModule, Router } from '@angular/router';
               <i class="bi bi-shield-lock-fill"></i>
             </div>
             <div>
-              <span class="admin-brand-title">QUIZ MASTER</span>
+              <span class="admin-brand-title">GEMS QUIZ</span>
               <span class="admin-brand-sub d-block">ADMIN COMMAND CENTER</span>
             </div>
           </a>
@@ -41,7 +41,7 @@ import { RouterModule, Router } from '@angular/router';
       <!-- Footer -->
       <footer class="admin-footer py-2 px-4 text-center border-top border-secondary border-opacity-25">
         <span class="text-secondary small">
-          Quiz Master Physical Room Competition Platform • v1.0.0
+          Gems Quiz • Real-Time Competition Platform • v1.0.0
         </span>
       </footer>
 

@@ -5,6 +5,7 @@ import { Router, ActivatedRoute, RouterModule } from '@angular/router';
 import { ParticipantApiService } from '../../../core/services/participant-api.service';
 import { QuizStateService } from '../../../core/services/quiz-state.service';
 import { QuizSignalRService } from '../../../core/services/quiz-signalr.service';
+import { AlertService } from '../../../core/services/alert.service';
 
 @Component({
   selector: 'app-participant-join',
@@ -17,10 +18,10 @@ import { QuizSignalRService } from '../../../core/services/quiz-signalr.service'
         <!-- Header -->
         <div class="text-center mb-4">
           <div class="icon-orb mx-auto mb-3">
-            <i class="bi bi-broadcast-pin"></i>
+            <i class="bi bi-gem"></i>
           </div>
-          <h1 class="h3 fw-bold text-white mb-1">QUIZ COMPETITION</h1>
-          <p class="text-secondary small mb-0">Live Physical Room Arena</p>
+          <h1 class="h3 fw-bold text-white mb-1">GEMS QUIZ</h1>
+          <p class="text-secondary small mb-0">Live Competition Arena</p>
         </div>
 
         <!-- Alert messages -->
@@ -38,7 +39,7 @@ import { QuizSignalRService } from '../../../core/services/quiz-signalr.service'
         <form (ngSubmit)="onJoin()" #joinForm="ngForm" class="d-flex flex-column gap-3">
           
           <div>
-            <label class="form-label text-light small fw-bold tracking-wide">QUIZ CODE</label>
+            <label class="form-label text-light small fw-bold tracking-wide">ROOM CODE</label>
             <div class="input-group-custom">
               <span class="input-icon"><i class="bi bi-hash"></i></span>
               <input 
@@ -56,17 +57,16 @@ import { QuizSignalRService } from '../../../core/services/quiz-signalr.service'
           </div>
 
           <div>
-            <label class="form-label text-light small fw-bold tracking-wide">FULL NAME</label>
+            <label class="form-label text-light small fw-bold tracking-wide">CONTESTANT FULL NAME</label>
             <div class="input-group-custom">
-              <span class="input-icon"><i class="bi bi-person-fill"></i></span>
+              <span class="input-icon"><i class="bi bi-person-badge-fill"></i></span>
               <input 
                 type="text" 
                 name="fullName" 
                 [(ngModel)]="fullName" 
                 required 
-                minlength="2"
-                placeholder="Enter your full name" 
-                maxlength="60"
+                placeholder="e.g. Alex Johnson"
+                maxlength="50"
                 class="form-control-custom"
                 [disabled]="isLoading()"
                 autocomplete="name"
@@ -76,59 +76,40 @@ import { QuizSignalRService } from '../../../core/services/quiz-signalr.service'
 
           <button 
             type="submit" 
-            class="btn-primary-action w-100 py-3 mt-3 fw-bold text-uppercase tracking-wider"
-            [disabled]="isLoading() || !sessionCode || !fullName"
+            class="btn btn-primary-gradient w-100 py-3 rounded-3 mt-2 fw-bold text-uppercase tracking-wide fs-6 d-flex align-items-center justify-content-center gap-2"
+            [disabled]="isLoading() || !joinForm.form.valid"
           >
-            <span *ngIf="!isLoading()">
-              <i class="bi bi-box-arrow-in-right me-2"></i>JOIN QUIZ
-            </span>
-            <span *ngIf="isLoading()" class="d-flex align-items-center justify-content-center gap-2">
-              <span class="spinner-border spinner-border-sm"></span>
-              CONNECTING...
-            </span>
+            <span *ngIf="isLoading()" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <i *ngIf="!isLoading()" class="bi bi-box-arrow-in-right"></i>
+            <span>{{ isLoading() ? 'Entering Arena...' : 'ENTER LIVE QUIZ' }}</span>
           </button>
-        </form>
 
-        <div class="text-center mt-4 pt-3 border-top border-secondary border-opacity-25">
-          <p class="text-muted small mb-0">
-            <i class="bi bi-info-circle me-1"></i>
-            The Quiz Master will speak the questions verbally.
-          </p>
-        </div>
+        </form>
 
       </div>
     </div>
   `,
   styles: [`
     .join-wrapper {
-      background: radial-gradient(circle at 50% 20%, rgba(99, 102, 241, 0.15), transparent 70%),
-                  radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.1), transparent 60%),
-                  #0b0f19;
+      background-color: var(--bg-primary);
     }
-    .glass-card {
-      background: rgba(17, 24, 39, 0.85);
-      backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 20px;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 30px rgba(99, 102, 241, 0.1);
+    .join-card {
+      border: 1px solid var(--border-subtle);
     }
     .icon-orb {
-      width: 58px;
-      height: 58px;
+      width: 60px;
+      height: 60px;
       border-radius: 16px;
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
       display: flex;
       align-items: center;
       justify-content: center;
+      color: #ffffff;
       font-size: 1.8rem;
-      color: #fff;
-      box-shadow: 0 0 24px rgba(99, 102, 241, 0.5);
+      box-shadow: 0 0 25px rgba(99, 102, 241, 0.4);
     }
     .tracking-wide {
       letter-spacing: 0.08em;
-    }
-    .tracking-wider {
-      letter-spacing: 0.1em;
     }
     .input-group-custom {
       position: relative;
@@ -138,44 +119,40 @@ import { QuizSignalRService } from '../../../core/services/quiz-signalr.service'
     .input-icon {
       position: absolute;
       left: 14px;
-      color: #94a3b8;
+      color: #818cf8;
       font-size: 1.1rem;
       pointer-events: none;
-      z-index: 2;
+      z-index: 5;
     }
     .form-control-custom {
       width: 100%;
-      background: rgba(15, 23, 42, 0.7);
-      border: 1.5px solid rgba(255, 255, 255, 0.12);
-      border-radius: 12px;
-      color: #f8fafc;
       padding: 12px 14px 12px 42px;
-      font-size: 1rem;
+      background: var(--input-bg, rgba(30, 41, 59, 0.7));
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-family: inherit;
       transition: all 0.2s ease;
     }
     .form-control-custom:focus {
       outline: none;
       border-color: #6366f1;
       box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
-      background: rgba(15, 23, 42, 0.9);
     }
-    .btn-primary-action {
-      background: linear-gradient(135deg, #6366f1, #4f46e5);
+    .btn-primary-gradient {
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
       border: none;
-      border-radius: 12px;
       color: #ffffff;
-      font-size: 1.05rem;
-      cursor: pointer;
-      box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35);
-      transition: all 0.25s ease;
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+      transition: all 0.2s ease;
     }
-    .btn-primary-action:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow: 0 12px 24px rgba(99, 102, 241, 0.5);
-      background: linear-gradient(135deg, #4f46e5, #4338ca);
+    .btn-primary-gradient:hover:not(:disabled) {
+      background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+      box-shadow: 0 6px 25px rgba(99, 102, 241, 0.6);
+      transform: translateY(-1px);
     }
-    .btn-primary-action:disabled {
-      opacity: 0.5;
+    .btn-primary-gradient:disabled {
+      opacity: 0.6;
       cursor: not-allowed;
     }
   `]
@@ -191,6 +168,7 @@ export class ParticipantJoinComponent {
     private participantApi: ParticipantApiService,
     private state: QuizStateService,
     private signalR: QuizSignalRService,
+    private alertService: AlertService,
     private router: Router,
     private route: ActivatedRoute
   ) {
@@ -199,13 +177,13 @@ export class ParticipantJoinComponent {
         this.sessionCode = params['code'].toUpperCase();
       }
       if (params['deleted']) {
-        this.infoMessage.set('The previous session was closed by the host.');
+        this.alertService.moderate('Session Closed', 'The previous competition was closed by the host.');
       }
       if (params['reset']) {
-        this.infoMessage.set('The host reset the contestants. Please re-enter to join fresh.');
+        this.alertService.info('Session Reset', 'The host reset the competition for a clean fresh start.');
       }
       if (params['kicked']) {
-        this.errorMessage.set(params['reason'] || 'You were removed from this competition by the Quiz Master.');
+        this.alertService.emergency('Tournament Eviction Notice', params['reason'] || 'You were removed from this competition by the Quiz Master.');
       }
     });
   }
@@ -222,6 +200,11 @@ export class ParticipantJoinComponent {
     this.participantApi.join({ sessionCode: code, fullName: name }).subscribe({
       next: async (res) => {
         this.state.setParticipantSession(res);
+
+        if (res.isReentry) {
+          this.alertService.moderate('Re-entered Active Session', res.reentryMessage || `Re-connected as ${res.fullName}!`);
+        }
+
         try {
           await this.signalR.startConnection(code, res.participantId, false);
           this.state.navigateParticipant('waiting');
@@ -234,7 +217,9 @@ export class ParticipantJoinComponent {
       },
       error: (err) => {
         this.isLoading.set(false);
-        this.errorMessage.set(err.error?.message || 'Could not join session. Please check the code and try again.');
+        const msg = err.error?.message || 'Could not join session. Please check the code and try again.';
+        this.errorMessage.set(msg);
+        this.alertService.moderate('Entry Error', msg);
       }
     });
   }

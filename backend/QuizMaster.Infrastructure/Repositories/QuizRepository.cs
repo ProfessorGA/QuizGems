@@ -316,4 +316,69 @@ public class QuizRepository : IQuizRepository
 
         await _context.SaveChangesAsync(ct);
     }
+
+    public async Task<bool> CancelQuestionAsync(Guid sessionId, int questionNumber, CancellationToken ct = default)
+    {
+        var question = await _context.Questions
+            .FirstOrDefaultAsync(q => q.SessionId == sessionId && q.QuestionNumber == questionNumber, ct);
+        if (question == null) return false;
+
+        // 1. Revert points awarded for this question from participants
+        var answers = await _context.Answers
+            .Where(a => a.QuestionId == question.Id)
+            .ToListAsync(ct);
+
+        var participantIds = answers.Select(a => a.ParticipantId).Distinct().ToList();
+        var participants = await _context.Participants
+            .Where(p => participantIds.Contains(p.Id))
+            .ToListAsync(ct);
+
+        var participantMap = participants.ToDictionary(p => p.Id);
+        foreach (var a in answers)
+        {
+            if (a.PointsAwarded > 0 && participantMap.TryGetValue(a.ParticipantId, out var p))
+            {
+                p.TotalScore = Math.Max(0, p.TotalScore - a.PointsAwarded);
+            }
+        }
+
+        // 2. Remove all submitted answers for this question
+        if (answers.Count > 0)
+        {
+            _context.Answers.RemoveRange(answers);
+        }
+
+        // 3. Reset question status
+        question.Status = QuestionStatus.Pending;
+        question.CorrectOption = null;
+        question.StartedAt = null;
+        question.VotingEndsAt = null;
+
+        // 4. Update session status if current
+        var session = await _context.Sessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+        if (session != null && session.CurrentQuestionNumber == questionNumber)
+        {
+            session.Status = SessionStatus.Waiting;
+        }
+
+        // 5. Recalculate ranks across all participants in session
+        var allParticipants = await _context.Participants
+            .Where(p => p.SessionId == sessionId)
+            .OrderByDescending(p => p.TotalScore)
+            .ThenBy(p => p.JoinedAt)
+            .ToListAsync(ct);
+
+        int currentRank = 1;
+        for (int i = 0; i < allParticipants.Count; i++)
+        {
+            if (i > 0 && allParticipants[i].TotalScore < allParticipants[i - 1].TotalScore)
+            {
+                currentRank = i + 1;
+            }
+            allParticipants[i].Rank = currentRank;
+        }
+
+        await _context.SaveChangesAsync(ct);
+        return true;
+    }
 }

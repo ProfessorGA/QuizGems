@@ -17,6 +17,8 @@ public class JoinSessionResponse
     public string FullName { get; set; } = string.Empty;
     public string? PreviousFullName { get; set; }
     public bool HasRenamed { get; set; }
+    public bool IsReentry { get; set; }
+    public string? ReentryMessage { get; set; }
     public SessionStatus SessionStatus { get; set; }
     public int CurrentQuestionNumber { get; set; }
     public int TotalQuestions { get; set; }

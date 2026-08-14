@@ -17,6 +17,7 @@ import {
 import { QuizSignalRService } from './quiz-signalr.service';
 import { ParticipantApiService } from './participant-api.service';
 import { SoundService } from './sound.service';
+import { AlertService } from './alert.service';
 
 @Injectable({
   providedIn: 'root'
@@ -61,7 +62,8 @@ export class QuizStateService {
     private signalR: QuizSignalRService,
     private sound: SoundService,
     private router: Router,
-    private participantApi: ParticipantApiService
+    private participantApi: ParticipantApiService,
+    private alertService: AlertService
   ) {
     this.restoreSessionFromStorage();
     this.subscribeToRealtimeEvents();
@@ -421,6 +423,42 @@ export class QuizStateService {
         const current = this.liveParticipants();
         this.liveParticipants.set(current.filter(p => p.id !== participantId));
       }
+    });
+
+    this.signalR.questionCancelled$.subscribe(dto => {
+      this.isVotingOpen.set(false);
+      this.stopCountdownTimer();
+      this.hasSubmitted.set(false);
+      this.selectedOption.set(null);
+      this.submissionTimeMs.set(null);
+      this.revealedCorrectOption.set(null);
+      this.latestResult.set(null);
+      this.myOutcome.set(null);
+
+      if (dto.updatedScoreboard) {
+        this.liveScoreboard.set(dto.updatedScoreboard);
+        const myId = this.participant()?.participantId;
+        if (myId) {
+          const me = dto.updatedScoreboard.find(e => e.participantId === myId);
+          if (me) {
+            this.totalScore.set(me.totalScore);
+            this.myRank.set(me.rank);
+          }
+        }
+      }
+
+      if (this.participant() && !this.router.url.startsWith('/admin')) {
+        this.alertService.emergency(
+          'Question Voided / Cancelled',
+          `Question #${dto.questionNumber} was cancelled by the host. All submitted votes have been voided and points reverted.`,
+          { icon: 'bi-slash-circle-fill' }
+        );
+        this.navigateParticipant('waiting');
+      }
+    });
+
+    this.signalR.participantReentered$.subscribe(dto => {
+      this.alertService.moderate('Contestant Re-entered', dto.message, { icon: 'bi-person-check-fill' });
     });
 
     this.signalR.sessionReset$.subscribe(() => {
