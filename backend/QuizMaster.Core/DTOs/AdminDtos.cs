@@ -99,3 +99,29 @@ public class ParticipantQuestionAuditDto
     public DateTime? SubmittedAtUtc { get; set; }
     public string SubmittedAtIst { get; set; } = string.Empty;
 }
+
+public class SystemErrorLogDto
+{
+    public Guid Id { get; set; }
+    public Guid? SessionId { get; set; }
+    public string? SessionCode { get; set; }
+    public string Category { get; set; } = string.Empty;
+    public string Severity { get; set; } = string.Empty;
+    public string ErrorMessage { get; set; } = string.Empty;
+    public string? StackTrace { get; set; }
+    public string? ContextData { get; set; }
+    public DateTime TimestampUtc { get; set; }
+    public DateTime TimestampIst { get; set; }
+    public string FormattedIst => TimestampIst.ToString("yyyy-MM-dd HH:mm:ss.fff");
+}
+
+public class SystemDiagnosticsSummaryDto
+{
+    public int TotalErrorsLogged { get; set; }
+    public int TotalCriticalCount { get; set; }
+    public int TotalWarningCount { get; set; }
+    public DateTime ServerUptimeUtc { get; set; }
+    public double ServerMemoryMb { get; set; }
+    public int ActiveConnections { get; set; }
+    public List<SystemErrorLogDto> RecentLogs { get; set; } = new();
+}

@@ -19,17 +19,20 @@ public class AdminSessionsController : ControllerBase
     private readonly IQuizRepository _repository;
     private readonly IQuizSessionManager _sessionManager;
     private readonly IQuizScoringService _scoringService;
+    private readonly IErrorLoggingService _errorLogger;
     private readonly IHubContext<QuizHub, IQuizHubClient> _hubContext;
 
     public AdminSessionsController(
         IQuizRepository repository,
         IQuizSessionManager sessionManager,
         IQuizScoringService scoringService,
+        IErrorLoggingService errorLogger,
         IHubContext<QuizHub, IQuizHubClient> hubContext)
     {
         _repository = repository;
         _sessionManager = sessionManager;
         _scoringService = scoringService;
+        _errorLogger = errorLogger;
         _hubContext = hubContext;
     }
 
@@ -463,6 +466,51 @@ public class AdminSessionsController : ControllerBase
         {
             return NotFound(new { message = "Session not found." });
         }
+    }
+
+    [HttpGet("{id:guid}/diagnostics")]
+    public async Task<ActionResult<SystemDiagnosticsSummaryDto>> GetDiagnostics(Guid id)
+    {
+        var diagnostics = await _errorLogger.GetDiagnosticsAsync(id);
+        return Ok(diagnostics);
+    }
+
+    [HttpGet("{id:guid}/system-logs")]
+    public async Task<ActionResult<List<SystemErrorLogDto>>> GetSystemLogs(Guid id, [FromQuery] int limit = 100)
+    {
+        var logs = await _errorLogger.GetLogsAsync(id, limit);
+        return Ok(logs);
+    }
+
+    [HttpGet("{id:guid}/export-logs")]
+    public async Task<IActionResult> ExportSystemLogsCsv(Guid id)
+    {
+        var session = await _repository.GetSessionByIdAsync(id);
+        var logs = await _errorLogger.GetLogsAsync(id, 500);
+
+        var csv = new System.Text.StringBuilder();
+        csv.AppendLine("==========================================================================================");
+        csv.AppendLine("  GEMS QUIZ - OFFICIAL SYSTEM DIAGNOSTICS & EXCEPTION AUDIT LOG");
+        csv.AppendLine("==========================================================================================");
+        csv.AppendLine($"Session: {session?.SessionName ?? "All"} ({session?.SessionCode ?? "Global"})");
+        csv.AppendLine($"Generated (IST): {DateTime.UtcNow.AddHours(5).AddMinutes(30):yyyy-MM-dd HH:mm:ss.fff} (Indian Standard Time UTC+5:30)");
+        csv.AppendLine($"Total Log Records: {logs.Count}");
+        csv.AppendLine();
+        csv.AppendLine("Timestamp (IST),Severity,Category,Session Code,Error Message,Context Data,Stack Trace Snippet");
+
+        foreach (var l in logs)
+        {
+            var msg = l.ErrorMessage.Replace("\"", "\"\"").Replace("\r", " ").Replace("\n", " ");
+            var ctx = (l.ContextData ?? "").Replace("\"", "\"\"").Replace("\r", " ").Replace("\n", " ");
+            var stack = (l.StackTrace ?? "").Replace("\"", "\"\"").Replace("\r", " ").Replace("\n", " ");
+            if (stack.Length > 200) stack = stack.Substring(0, 200) + "...";
+
+            csv.AppendLine($"\"{l.FormattedIst}\",\"{l.Severity}\",\"{l.Category}\",\"{l.SessionCode}\",\"{msg}\",\"{ctx}\",\"{stack}\"");
+        }
+
+        var bytes = System.Text.Encoding.UTF8.GetBytes(csv.ToString());
+        var filename = $"Quiz_SystemLogs_{session?.SessionCode ?? "Global"}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv";
+        return File(bytes, "text/csv", filename);
     }
 
     [HttpDelete("{id:guid}")]

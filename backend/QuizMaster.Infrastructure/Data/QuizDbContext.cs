@@ -14,6 +14,7 @@ public class QuizDbContext : DbContext
     public DbSet<QuizQuestion> Questions => Set<QuizQuestion>();
     public DbSet<QuizAnswer> Answers => Set<QuizAnswer>();
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
+    public DbSet<SystemErrorLog> SystemErrorLogs => Set<SystemErrorLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -90,6 +91,18 @@ public class QuizDbContext : DbContext
             entity.HasIndex(e => e.Username).IsUnique();
             entity.Property(e => e.Username).HasMaxLength(50).IsRequired();
             entity.Property(e => e.PasswordHash).IsRequired();
+        });
+
+        // SystemErrorLog configuration
+        modelBuilder.Entity<SystemErrorLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.SessionId);
+            entity.HasIndex(e => e.Category);
+            entity.HasIndex(e => e.TimestampUtc);
+            entity.Property(e => e.Category).HasMaxLength(50);
+            entity.Property(e => e.Severity).HasMaxLength(20);
+            entity.Property(e => e.SessionCode).HasMaxLength(20);
         });
     }
 }

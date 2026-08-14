@@ -234,6 +234,15 @@ public class QuizRepository : IQuizRepository
         await _context.SaveChangesAsync(ct);
     }
 
+    public async Task SaveAnswersBatchAsync(IEnumerable<QuizAnswer> answers, CancellationToken ct = default)
+    {
+        var list = answers.ToList();
+        if (list.Count == 0) return;
+
+        _context.Answers.AddRange(list);
+        await _context.SaveChangesAsync(ct);
+    }
+
     public async Task<AdminUser?> GetAdminByUsernameAsync(string username, CancellationToken ct = default)
     {
         var normalized = username.Trim().ToLowerInvariant();
@@ -380,5 +389,32 @@ public class QuizRepository : IQuizRepository
 
         await _context.SaveChangesAsync(ct);
         return true;
+    }
+
+    public async Task LogSystemErrorAsync(SystemErrorLog log, CancellationToken ct = default)
+    {
+        try
+        {
+            _context.SystemErrorLogs.Add(log);
+            await _context.SaveChangesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CRITICAL] Failed to persist system error log to DB: {ex.Message}");
+        }
+    }
+
+    public async Task<List<SystemErrorLog>> GetSystemLogsAsync(Guid? sessionId = null, int limit = 100, CancellationToken ct = default)
+    {
+        var query = _context.SystemErrorLogs.AsQueryable();
+        if (sessionId.HasValue && sessionId.Value != Guid.Empty)
+        {
+            query = query.Where(l => l.SessionId == sessionId.Value);
+        }
+
+        return await query
+            .OrderByDescending(l => l.TimestampUtc)
+            .Take(limit)
+            .ToListAsync(ct);
     }
 }

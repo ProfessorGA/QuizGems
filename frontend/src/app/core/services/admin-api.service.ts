@@ -15,7 +15,9 @@ import {
   ScoreboardEntryDto,
   FinalScoreboardDto,
   ParticipantAuditDto,
-  QuestionCancelledHubDto
+  QuestionCancelledHubDto,
+  SystemErrorLogDto,
+  SystemDiagnosticsSummaryDto
 } from '../models/quiz.models';
 
 @Injectable({
@@ -123,6 +125,18 @@ export class AdminApiService {
 
   cancelQuestion(sessionId: string, questionNumber: number, reason?: string): Observable<QuestionCancelledHubDto> {
     return this.http.post<QuestionCancelledHubDto>(`${this.baseUrl}/sessions/${sessionId}/questions/${questionNumber}/cancel`, { reason });
+  }
+
+  getDiagnostics(sessionId: string): Observable<SystemDiagnosticsSummaryDto> {
+    return this.http.get<SystemDiagnosticsSummaryDto>(`${this.baseUrl}/sessions/${sessionId}/diagnostics`);
+  }
+
+  getSystemLogs(sessionId: string, limit: number = 100): Observable<SystemErrorLogDto[]> {
+    return this.http.get<SystemErrorLogDto[]>(`${this.baseUrl}/sessions/${sessionId}/system-logs?limit=${limit}`);
+  }
+
+  exportSystemLogsCsv(sessionId: string): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/sessions/${sessionId}/export-logs`, { responseType: 'blob' });
   }
 
   deleteSession(id: string): Observable<{ message: string }> {

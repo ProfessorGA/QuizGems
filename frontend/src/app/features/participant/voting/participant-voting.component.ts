@@ -324,7 +324,7 @@ export class ParticipantVotingComponent implements OnInit {
     this.selectedOption.set(option);
     this.isSubmitting.set(true);
 
-    // Haptic pulse on touch
+    // Haptic feedback immediately on touch
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       try { navigator.vibrate(50); } catch {}
     }
@@ -335,36 +335,45 @@ export class ParticipantVotingComponent implements OnInit {
       return;
     }
 
+    // 1. Instant Optimistic Lock: Transition UI immediately without waiting for network
+    const elapsedSeconds = Math.max(0.05, this.state.durationSeconds() - this.state.remainingSeconds());
+    const estimatedMs = Math.round(elapsedSeconds * 1000);
+    this.state.markAnswerSubmitted(option, estimatedMs);
+    this.state.navigateParticipant('submitted');
+
+    // 2. Resilient Background Transmission (SignalR with jittered REST fallback)
+    this.transmitAnswerWithRetry(p.sessionCode, p.participantId, option);
+  }
+
+  private async transmitAnswerWithRetry(sessionCode: string, participantId: string, option: number, attempt = 1): Promise<void> {
     try {
       // Primary: Real-time SignalR Hub invocation
-      const res = await this.signalR.submitAnswer(p.sessionCode, p.participantId, option);
-      if (res.success) {
-        this.state.markAnswerSubmitted(option, res.responseMilliseconds);
-        this.state.navigateParticipant('submitted');
-      } else {
-        console.warn('Submission response not successful:', res.message);
-        // Fallback REST call
-        this.fallbackRestSubmission(p.sessionCode, p.participantId, option);
+      const res = await this.signalR.submitAnswer(sessionCode, participantId, option);
+      if (res.success && res.responseMilliseconds) {
+        this.state.submissionTimeMs.set(res.responseMilliseconds);
       }
-    } catch (err) {
-      console.warn('SignalR submission failed, attempting REST fallback...', err);
-      this.fallbackRestSubmission(p.sessionCode, p.participantId, option);
+    } catch (signalrErr) {
+      console.warn(`[Attempt ${attempt}] SignalR submission error, trying REST fallback:`, signalrErr);
+
+      // Secondary: REST API fallback
+      this.participantApi.submitAnswer({ sessionCode, participantId, selectedOption: option }).subscribe({
+        next: (res) => {
+          if (res.success && res.responseMilliseconds) {
+            this.state.submissionTimeMs.set(res.responseMilliseconds);
+          }
+        },
+        error: (restErr) => {
+          console.warn(`[Attempt ${attempt}] REST answer submission failed:`, restErr);
+          if (attempt < 3) {
+            const delay = attempt * 300 + Math.floor(Math.random() * 200);
+            setTimeout(() => {
+              this.transmitAnswerWithRetry(sessionCode, participantId, option, attempt + 1);
+            }, delay);
+          }
+        }
+      });
     } finally {
       this.isSubmitting.set(false);
     }
-  }
-
-  private fallbackRestSubmission(sessionCode: string, participantId: string, option: number): void {
-    this.participantApi.submitAnswer({ sessionCode, participantId, selectedOption: option }).subscribe({
-      next: (res) => {
-        if (res.success) {
-          this.state.markAnswerSubmitted(option, res.responseMilliseconds);
-          this.state.navigateParticipant('submitted');
-        }
-      },
-      error: (err) => {
-        console.error('REST fallback answer submission failed:', err);
-      }
-    });
   }
 }

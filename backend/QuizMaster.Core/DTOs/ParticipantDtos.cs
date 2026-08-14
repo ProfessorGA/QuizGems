@@ -70,4 +70,5 @@ public class ParticipantStateDto
     public int PointsAwarded { get; set; }
     public int TotalScore { get; set; }
     public int Rank { get; set; }
+    public bool IsKicked { get; set; } = false;
 }

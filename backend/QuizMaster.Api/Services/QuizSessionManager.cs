@@ -9,6 +9,26 @@ using QuizMaster.Infrastructure.Repositories;
 
 namespace QuizMaster.Api.Services;
 
+public class ActiveSessionCacheItem
+{
+    public Guid SessionId { get; set; }
+    public string SessionCode { get; set; } = string.Empty;
+    public SessionStatus Status { get; set; }
+    public int CurrentQuestionNumber { get; set; }
+    public int TotalQuestions { get; set; }
+    public Guid ActiveQuestionId { get; set; }
+    public DateTime? StartedAt { get; set; }
+    public DateTime? VotingEndsAt { get; set; }
+    public int DurationSeconds { get; set; }
+    public int TotalParticipants { get; set; }
+
+    // Map: ParticipantId -> FullName
+    public ConcurrentDictionary<Guid, string> EnrolledParticipants { get; set; } = new();
+
+    // Map: ParticipantId -> (SelectedOption, ResponseMs, ServerReceivedAt)
+    public ConcurrentDictionary<Guid, (int SelectedOption, double ResponseMs, DateTime ServerReceivedAt)> Submissions { get; set; } = new();
+}
+
 public interface IQuizSessionManager
 {
     Task<QuizSession> StartSessionAsync(Guid sessionId, CancellationToken ct = default);
@@ -28,14 +48,91 @@ public class QuizSessionManager : IQuizSessionManager
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IHubContext<QuizHub, IQuizHubClient> _hubContext;
+    private readonly IAnswerQueueService _answerQueue;
+    private readonly IErrorLoggingService _errorLogger;
+
     private static readonly ConcurrentDictionary<Guid, CancellationTokenSource> _activeTimers = new();
+    private static readonly ConcurrentDictionary<string, ActiveSessionCacheItem> _sessionCaches = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> _cacheInitLocks = new(StringComparer.OrdinalIgnoreCase);
 
     public QuizSessionManager(
         IServiceScopeFactory scopeFactory,
-        IHubContext<QuizHub, IQuizHubClient> hubContext)
+        IHubContext<QuizHub, IQuizHubClient> hubContext,
+        IAnswerQueueService answerQueue,
+        IErrorLoggingService errorLogger)
     {
         _scopeFactory = scopeFactory;
         _hubContext = hubContext;
+        _answerQueue = answerQueue;
+        _errorLogger = errorLogger;
+    }
+
+    private async Task<ActiveSessionCacheItem> GetOrRefreshCacheAsync(string sessionCode, CancellationToken ct = default)
+    {
+        var normalizedCode = sessionCode.Trim().ToUpperInvariant();
+        if (_sessionCaches.TryGetValue(normalizedCode, out var cached))
+        {
+            return cached;
+        }
+
+        var gate = _cacheInitLocks.GetOrAdd(normalizedCode, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct);
+        try
+        {
+            if (_sessionCaches.TryGetValue(normalizedCode, out cached))
+            {
+                return cached;
+            }
+
+            using var scope = _scopeFactory.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<IQuizRepository>();
+
+            var session = await repo.GetSessionByCodeAsync(normalizedCode, ct);
+            if (session == null)
+            {
+                throw new KeyNotFoundException($"Session '{sessionCode}' not found.");
+            }
+
+            var currentQNum = Math.Max(1, session.CurrentQuestionNumber);
+            var question = await repo.GetQuestionByNumberAsync(session.Id, currentQNum, ct);
+            var participants = await repo.GetParticipantsBySessionIdAsync(session.Id, ct);
+
+            var cacheItem = new ActiveSessionCacheItem
+            {
+                SessionId = session.Id,
+                SessionCode = session.SessionCode,
+                Status = session.Status,
+                CurrentQuestionNumber = currentQNum,
+                TotalQuestions = session.TotalQuestions,
+                ActiveQuestionId = question?.Id ?? Guid.Empty,
+                StartedAt = question?.StartedAt,
+                VotingEndsAt = question?.VotingEndsAt,
+                DurationSeconds = session.QuestionDurationSeconds > 0 ? session.QuestionDurationSeconds : 15,
+                TotalParticipants = participants.Count
+            };
+
+            foreach (var p in participants)
+            {
+                cacheItem.EnrolledParticipants[p.Id] = p.FullName;
+            }
+
+            // Load any already recorded answers
+            if (question != null)
+            {
+                var existingAnswers = await repo.GetAnswersForQuestionAsync(question.Id, ct);
+                foreach (var a in existingAnswers)
+                {
+                    cacheItem.Submissions[a.ParticipantId] = (a.SelectedOption, a.ResponseMilliseconds, a.ServerReceivedAt);
+                }
+            }
+
+            _sessionCaches[normalizedCode] = cacheItem;
+            return cacheItem;
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     public async Task<QuizSession> StartSessionAsync(Guid sessionId, CancellationToken ct = default)
@@ -68,6 +165,11 @@ public class QuizSessionManager : IQuizSessionManager
         }
 
         await repo.UpdateSessionAsync(session, ct);
+
+        // Update in-memory cache
+        var normalizedCode = session.SessionCode.Trim().ToUpperInvariant();
+        _sessionCaches.TryRemove(normalizedCode, out _);
+        await GetOrRefreshCacheAsync(normalizedCode, ct);
 
         // Notify participants and admin
         var sessionState = new SessionStateHubDto
@@ -130,6 +232,31 @@ public class QuizSessionManager : IQuizSessionManager
         session.CurrentQuestionNumber = currentQNum;
         await repo.UpdateSessionAsync(session, ct);
 
+        // Populate / Update High-Speed In-Memory Cache
+        var normalizedCode = session.SessionCode.Trim().ToUpperInvariant();
+        var participants = await repo.GetParticipantsBySessionIdAsync(session.Id, ct);
+
+        var cacheItem = new ActiveSessionCacheItem
+        {
+            SessionId = session.Id,
+            SessionCode = session.SessionCode,
+            Status = SessionStatus.Voting,
+            CurrentQuestionNumber = currentQNum,
+            TotalQuestions = session.TotalQuestions,
+            ActiveQuestionId = question.Id,
+            StartedAt = nowUtc,
+            VotingEndsAt = endsAtUtc,
+            DurationSeconds = duration,
+            TotalParticipants = participants.Count
+        };
+
+        foreach (var p in participants)
+        {
+            cacheItem.EnrolledParticipants[p.Id] = p.FullName;
+        }
+
+        _sessionCaches[normalizedCode] = cacheItem;
+
         var votingDto = new VotingStartedHubDto
         {
             QuestionId = question.Id,
@@ -170,7 +297,7 @@ public class QuizSessionManager : IQuizSessionManager
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in automatic voting timer for session {sessionId}: {ex.Message}");
+                await _errorLogger.LogErrorAsync("Voting", $"Error in automatic voting timer for session {sessionId}", ex, sessionId, session.SessionCode);
             }
             finally
             {
@@ -183,6 +310,12 @@ public class QuizSessionManager : IQuizSessionManager
 
     private async Task TriggerAutomaticTimeoutAsync(Guid sessionId, Guid questionId, string sessionCode, int questionNumber)
     {
+        var normalizedCode = sessionCode.Trim().ToUpperInvariant();
+        if (_sessionCaches.TryGetValue(normalizedCode, out var cache))
+        {
+            cache.Status = SessionStatus.VotingEnded;
+        }
+
         using var scope = _scopeFactory.CreateScope();
         var repo = scope.ServiceProvider.GetRequiredService<IQuizRepository>();
 
@@ -199,14 +332,14 @@ public class QuizSessionManager : IQuizSessionManager
             await repo.UpdateSessionAsync(session);
         }
 
-        var answers = await repo.GetAnswersForQuestionAsync(questionId);
-        var participants = await repo.GetParticipantsBySessionIdAsync(sessionId);
+        var totalAnswered = cache != null ? cache.Submissions.Count : (await repo.GetAnswersForQuestionAsync(questionId)).Count;
+        var totalParticipants = cache != null ? Math.Max(cache.TotalParticipants, cache.EnrolledParticipants.Count) : (await repo.GetParticipantsBySessionIdAsync(sessionId)).Count;
 
         var summaryDto = new VotingEndedHubDto
         {
             QuestionNumber = questionNumber,
-            TotalAnswered = answers.Count,
-            TotalParticipants = participants.Count
+            TotalAnswered = totalAnswered,
+            TotalParticipants = totalParticipants
         };
 
         await _hubContext.Clients.Group($"session_{sessionCode}").VotingEnded(summaryDto);
@@ -227,6 +360,12 @@ public class QuizSessionManager : IQuizSessionManager
         var session = await repo.GetSessionByIdAsync(sessionId, ct)
             ?? throw new KeyNotFoundException("Session not found");
 
+        var normalizedCode = session.SessionCode.Trim().ToUpperInvariant();
+        if (_sessionCaches.TryGetValue(normalizedCode, out var cache))
+        {
+            cache.Status = SessionStatus.VotingEnded;
+        }
+
         var question = await repo.GetQuestionByNumberAsync(session.Id, session.CurrentQuestionNumber, ct);
         if (question != null)
         {
@@ -237,16 +376,14 @@ public class QuizSessionManager : IQuizSessionManager
         session.Status = SessionStatus.VotingEnded;
         await repo.UpdateSessionAsync(session, ct);
 
-        var answers = question != null 
-            ? await repo.GetAnswersForQuestionAsync(question.Id, ct) 
-            : new List<QuizAnswer>();
-        var participants = await repo.GetParticipantsBySessionIdAsync(session.Id, ct);
+        var totalAnswered = cache != null ? cache.Submissions.Count : (question != null ? (await repo.GetAnswersForQuestionAsync(question.Id, ct)).Count : 0);
+        var totalParticipants = cache != null ? Math.Max(cache.TotalParticipants, cache.EnrolledParticipants.Count) : (await repo.GetParticipantsBySessionIdAsync(session.Id, ct)).Count;
 
         var summaryDto = new VotingEndedHubDto
         {
             QuestionNumber = session.CurrentQuestionNumber,
-            TotalAnswered = answers.Count,
-            TotalParticipants = participants.Count
+            TotalAnswered = totalAnswered,
+            TotalParticipants = totalParticipants
         };
 
         await _hubContext.Clients.Group($"session_{session.SessionCode}").VotingEnded(summaryDto);
@@ -268,12 +405,21 @@ public class QuizSessionManager : IQuizSessionManager
             cts.Dispose();
         }
 
+        // CRITICAL: Flush any pending answers from the high-throughput background queue to DB before scoring!
+        await _answerQueue.FlushAsync(sessionId, ct);
+
         using var scope = _scopeFactory.CreateScope();
         var repo = scope.ServiceProvider.GetRequiredService<IQuizRepository>();
         var scoringService = scope.ServiceProvider.GetRequiredService<IQuizScoringService>();
 
         var session = await repo.GetSessionByIdAsync(sessionId, ct)
             ?? throw new KeyNotFoundException("Session not found");
+
+        var normalizedCode = session.SessionCode.Trim().ToUpperInvariant();
+        if (_sessionCaches.TryGetValue(normalizedCode, out var cache))
+        {
+            cache.Status = SessionStatus.AnswerReveal;
+        }
 
         var question = await repo.GetQuestionByNumberAsync(session.Id, session.CurrentQuestionNumber, ct)
             ?? throw new InvalidOperationException($"Question {session.CurrentQuestionNumber} not found.");
@@ -328,15 +474,35 @@ public class QuizSessionManager : IQuizSessionManager
         var nextQuestion = await repo.GetQuestionByNumberAsync(session.Id, session.CurrentQuestionNumber, ct);
         if (nextQuestion == null)
         {
-            await repo.CreateQuestionAsync(new QuizQuestion
+            nextQuestion = await repo.CreateQuestionAsync(new QuizQuestion
             {
                 SessionId = session.Id,
                 QuestionNumber = session.CurrentQuestionNumber,
                 Status = QuestionStatus.Pending
             }, ct);
         }
+        else
+        {
+            nextQuestion.Status = QuestionStatus.Pending;
+            nextQuestion.CorrectOption = null;
+            nextQuestion.StartedAt = null;
+            nextQuestion.VotingEndsAt = null;
+            await repo.UpdateQuestionAsync(nextQuestion, ct);
+        }
 
         await repo.UpdateSessionAsync(session, ct);
+
+        // Update in-memory cache for the new question
+        var normalizedCode = session.SessionCode.Trim().ToUpperInvariant();
+        if (_sessionCaches.TryGetValue(normalizedCode, out var cache))
+        {
+            cache.Status = SessionStatus.Waiting;
+            cache.CurrentQuestionNumber = session.CurrentQuestionNumber;
+            cache.ActiveQuestionId = nextQuestion.Id;
+            cache.StartedAt = null;
+            cache.VotingEndsAt = null;
+            cache.Submissions.Clear();
+        }
 
         var nextDto = new NextQuestionHubDto
         {
@@ -346,11 +512,25 @@ public class QuizSessionManager : IQuizSessionManager
 
         await _hubContext.Clients.Group($"session_{session.SessionCode}").NextQuestion(nextDto);
 
+        // Broadcast leaderboard
+        var leaderboard = await scoringService.GetLiveScoreboardAsync(session.Id, ct);
+        await _hubContext.Clients.Group($"session_{session.SessionCode}").ScoreboardUpdated(leaderboard);
+
         return nextDto;
     }
 
     public async Task<FinalScoreboardDto> CompleteQuizAsync(Guid sessionId, CancellationToken ct = default)
     {
+        // Cancel active server timer
+        if (_activeTimers.TryRemove(sessionId, out var cts))
+        {
+            cts.Cancel();
+            cts.Dispose();
+        }
+
+        // Flush any pending submissions
+        await _answerQueue.FlushAsync(sessionId, ct);
+
         using var scope = _scopeFactory.CreateScope();
         var repo = scope.ServiceProvider.GetRequiredService<IQuizRepository>();
         var scoringService = scope.ServiceProvider.GetRequiredService<IQuizScoringService>();
@@ -361,6 +541,12 @@ public class QuizSessionManager : IQuizSessionManager
         session.Status = SessionStatus.Completed;
         session.EndedAt = DateTime.UtcNow;
         await repo.UpdateSessionAsync(session, ct);
+
+        var normalizedCode = session.SessionCode.Trim().ToUpperInvariant();
+        if (_sessionCaches.TryGetValue(normalizedCode, out var cache))
+        {
+            cache.Status = SessionStatus.Completed;
+        }
 
         var finalScoreboard = await scoringService.GetFinalScoreboardAsync(sessionId, ct);
 
@@ -389,6 +575,14 @@ public class QuizSessionManager : IQuizSessionManager
         if (!success)
         {
             throw new KeyNotFoundException($"Question #{questionNumber} not found in session.");
+        }
+
+        // Reset in-memory cache submissions
+        var normalizedCode = session.SessionCode.Trim().ToUpperInvariant();
+        if (_sessionCaches.TryGetValue(normalizedCode, out var cache))
+        {
+            cache.Status = SessionStatus.Waiting;
+            cache.Submissions.Clear();
         }
 
         var updatedScoreboard = await scoringService.GetLiveScoreboardAsync(sessionId, ct);
@@ -428,89 +622,109 @@ public class QuizSessionManager : IQuizSessionManager
             };
         }
 
-        using var scope = _scopeFactory.CreateScope();
-        var repo = scope.ServiceProvider.GetRequiredService<IQuizRepository>();
-
-        var session = await repo.GetSessionByCodeAsync(sessionCode, ct);
-        if (session == null)
+        try
         {
-            return new SubmitAnswerResponse { Success = false, Message = "Session not found." };
+            // 1. Instant sub-millisecond in-memory cache lookup
+            var normalizedCode = sessionCode.Trim().ToUpperInvariant();
+            var cache = await GetOrRefreshCacheAsync(normalizedCode, ct);
+
+            // 2. Validate Participant belongs to session
+            if (!cache.EnrolledParticipants.TryGetValue(participantId, out var participantName))
+            {
+                // Fallback: Check DB if participant just enrolled in parallel
+                using var scope = _scopeFactory.CreateScope();
+                var repo = scope.ServiceProvider.GetRequiredService<IQuizRepository>();
+                var p = await repo.GetParticipantByIdAsync(participantId, ct);
+                if (p == null || p.SessionId != cache.SessionId)
+                {
+                    return new SubmitAnswerResponse { Success = false, Message = "Participant not recognized for this session." };
+                }
+                participantName = p.FullName;
+                cache.EnrolledParticipants[p.Id] = participantName;
+            }
+
+            // 3. Validate Session and Question Status
+            if (cache.Status != SessionStatus.Voting)
+            {
+                return new SubmitAnswerResponse { Success = false, Message = "Voting is not currently active." };
+            }
+
+            // 4. Authoritative Server-Side Timeout Check (grace window of 500ms for network transit)
+            if (cache.VotingEndsAt.HasValue && serverReceivedAt > cache.VotingEndsAt.Value.AddMilliseconds(500))
+            {
+                return new SubmitAnswerResponse { Success = false, Message = "Time's up. Answer arrived after voting closed." };
+            }
+
+            // 5. Calculate official server response time in milliseconds
+            var startedAt = cache.StartedAt ?? serverReceivedAt.AddSeconds(-cache.DurationSeconds);
+            var responseMs = Math.Max(1.0, (serverReceivedAt - startedAt).TotalMilliseconds);
+
+            // 6. Thread-Safe Duplicate Prevention in Memory (< 0.001ms)
+            if (!cache.Submissions.TryAdd(participantId, (selectedOption, responseMs, serverReceivedAt)))
+            {
+                var existing = cache.Submissions[participantId];
+                return new SubmitAnswerResponse
+                {
+                    Success = false,
+                    Message = "Answer has already been submitted for this question.",
+                    SelectedOption = existing.SelectedOption,
+                    ResponseMilliseconds = existing.ResponseMs,
+                    ServerReceivedAt = existing.ServerReceivedAt
+                };
+            }
+
+            // 7. Create Entity & Enqueue for Asynchronous Background Batch Persistence
+            var answer = new QuizAnswer
+            {
+                SessionId = cache.SessionId,
+                QuestionId = cache.ActiveQuestionId,
+                ParticipantId = participantId,
+                SelectedOption = selectedOption,
+                ServerReceivedAt = serverReceivedAt,
+                ResponseMilliseconds = responseMs
+            };
+
+            await _answerQueue.EnqueueAnswerAsync(answer, ct);
+
+            // 8. Real-time broadcast to Admin console
+            var totalAnswered = cache.Submissions.Count;
+            var totalParticipants = Math.Max(cache.TotalParticipants, cache.EnrolledParticipants.Count);
+
+            _ = _hubContext.Clients.Group($"admin_{cache.SessionCode}").AnswerSubmitted(new AnswerSubmittedHubDto
+            {
+                ParticipantId = participantId,
+                ParticipantName = participantName,
+                TotalAnswered = totalAnswered,
+                TotalParticipants = totalParticipants,
+                ResponseMilliseconds = responseMs
+            });
+
+            return new SubmitAnswerResponse
+            {
+                Success = true,
+                Message = "Answer submitted successfully.",
+                SelectedOption = selectedOption,
+                ResponseMilliseconds = responseMs,
+                ServerReceivedAt = serverReceivedAt
+            };
         }
-
-        var participant = await repo.GetParticipantByIdAsync(participantId, ct);
-        if (participant == null || participant.SessionId != session.Id)
+        catch (Exception ex)
         {
-            return new SubmitAnswerResponse { Success = false, Message = "Participant not recognized for this session." };
-        }
+            await _errorLogger.LogErrorAsync(
+                "Voting", 
+                $"Submission error for participant {participantId} in session {sessionCode}: {ex.Message}", 
+                ex, 
+                null, 
+                sessionCode, 
+                "Error", 
+                $"ParticipantId: {participantId}, Option: {selectedOption}");
 
-        if (session.Status != SessionStatus.Voting)
-        {
-            return new SubmitAnswerResponse { Success = false, Message = "Voting is not currently active." };
-        }
-
-        var question = await repo.GetQuestionByNumberAsync(session.Id, session.CurrentQuestionNumber, ct);
-        if (question == null || question.Status != QuestionStatus.Voting)
-        {
-            return new SubmitAnswerResponse { Success = false, Message = "Question is not currently open for voting." };
-        }
-
-        // Authoritative Server-Side Timeout Check
-        if (question.VotingEndsAt.HasValue && serverReceivedAt > question.VotingEndsAt.Value)
-        {
-            return new SubmitAnswerResponse { Success = false, Message = "Time's up. Answer arrived after voting closed." };
-        }
-
-        // Check for duplicate answer
-        var existingAnswer = await repo.GetAnswerAsync(question.Id, participantId, ct);
-        if (existingAnswer != null)
-        {
             return new SubmitAnswerResponse
             {
                 Success = false,
-                Message = "Answer has already been submitted for this question.",
-                SelectedOption = existingAnswer.SelectedOption,
-                ResponseMilliseconds = existingAnswer.ResponseMilliseconds,
-                ServerReceivedAt = existingAnswer.ServerReceivedAt
+                Message = "Server encountered a transient error while receiving answer. Retrying..."
             };
         }
-
-        // Calculate official server response time in milliseconds
-        var startedAt = question.StartedAt ?? session.CreatedAt;
-        var responseMs = Math.Max(1.0, (serverReceivedAt - startedAt).TotalMilliseconds);
-
-        var answer = new QuizAnswer
-        {
-            SessionId = session.Id,
-            QuestionId = question.Id,
-            ParticipantId = participantId,
-            SelectedOption = selectedOption,
-            ServerReceivedAt = serverReceivedAt,
-            ResponseMilliseconds = responseMs
-        };
-
-        await repo.RecordAnswerAsync(answer, ct);
-
-        var totalAnswered = (await repo.GetAnswersForQuestionAsync(question.Id, ct)).Count;
-        var totalParticipants = (await repo.GetParticipantsBySessionIdAsync(session.Id, ct)).Count;
-
-        // Broadcast to admin in real-time
-        await _hubContext.Clients.Group($"admin_{session.SessionCode}").AnswerSubmitted(new AnswerSubmittedHubDto
-        {
-            ParticipantId = participant.Id,
-            ParticipantName = participant.FullName,
-            TotalAnswered = totalAnswered,
-            TotalParticipants = totalParticipants,
-            ResponseMilliseconds = responseMs
-        });
-
-        return new SubmitAnswerResponse
-        {
-            Success = true,
-            Message = "Answer submitted successfully.",
-            SelectedOption = selectedOption,
-            ResponseMilliseconds = responseMs,
-            ServerReceivedAt = serverReceivedAt
-        };
     }
 
     public async Task<ParticipantStateDto> RenameParticipantAsync(string sessionCode, Guid participantId, string newFullName, CancellationToken ct = default)
@@ -540,6 +754,13 @@ public class QuizSessionManager : IQuizSessionManager
 
         await repo.UpdateParticipantAsync(participant, ct);
 
+        // Update in-memory cache
+        var normalizedCode = sessionCode.Trim().ToUpperInvariant();
+        if (_sessionCaches.TryGetValue(normalizedCode, out var cache))
+        {
+            cache.EnrolledParticipants[participantId] = cleanName;
+        }
+
         // Broadcast to both session and admin groups
         await _hubContext.Clients.Group($"session_{sessionCode}").ParticipantRenamed(participantId, cleanName, previousName);
         await _hubContext.Clients.Group($"admin_{sessionCode}").ParticipantRenamed(participantId, cleanName, previousName);
@@ -558,11 +779,11 @@ public class QuizSessionManager : IQuizSessionManager
         var participant = await repo.GetParticipantByIdAsync(participantId, ct)
             ?? throw new KeyNotFoundException("Participant not found");
 
-        var activeQuestion = await repo.GetQuestionByNumberAsync(session.Id, session.CurrentQuestionNumber, ct);
+        var question = await repo.GetQuestionByNumberAsync(session.Id, session.CurrentQuestionNumber, ct);
         QuizAnswer? answer = null;
-        if (activeQuestion != null)
+        if (question != null)
         {
-            answer = await repo.GetAnswerAsync(activeQuestion.Id, participantId, ct);
+            answer = await repo.GetAnswerAsync(question.Id, participantId, ct);
         }
 
         return new ParticipantStateDto
@@ -576,17 +797,18 @@ public class QuizSessionManager : IQuizSessionManager
             SessionStatus = session.Status,
             CurrentQuestionNumber = session.CurrentQuestionNumber,
             TotalQuestions = session.TotalQuestions,
-            CurrentQuestionStatus = activeQuestion?.Status,
-            VotingEndsAt = activeQuestion?.VotingEndsAt,
-            DurationSeconds = session.QuestionDurationSeconds,
+            CurrentQuestionStatus = question?.Status,
+            VotingEndsAt = question?.VotingEndsAt,
+            DurationSeconds = session.QuestionDurationSeconds > 0 ? session.QuestionDurationSeconds : 15,
             HasSubmittedAnswer = answer != null,
             SubmittedOption = answer?.SelectedOption,
-            CorrectOption = session.RevealResults || session.Status == SessionStatus.Completed ? activeQuestion?.CorrectOption : null,
+            CorrectOption = question?.CorrectOption,
             IsCorrect = answer?.IsCorrect,
             IsFastest = answer?.IsFastest ?? false,
             PointsAwarded = answer?.PointsAwarded ?? 0,
             TotalScore = participant.TotalScore,
-            Rank = participant.Rank
+            Rank = participant.Rank,
+            IsKicked = false
         };
     }
 
@@ -598,8 +820,19 @@ public class QuizSessionManager : IQuizSessionManager
         var session = await repo.GetSessionByIdAsync(sessionId, ct)
             ?? throw new KeyNotFoundException("Session not found");
 
-        var activeQuestion = await repo.GetQuestionByNumberAsync(session.Id, session.CurrentQuestionNumber, ct);
-        var answers = activeQuestion != null ? await repo.GetAnswersForQuestionAsync(activeQuestion.Id, ct) : new List<QuizAnswer>();
+        var participants = await repo.GetParticipantsBySessionIdAsync(sessionId, ct);
+        var activeQuestion = await repo.GetQuestionByNumberAsync(sessionId, session.CurrentQuestionNumber, ct);
+
+        int answeredCount = 0;
+        var normalizedCode = session.SessionCode.Trim().ToUpperInvariant();
+        if (_sessionCaches.TryGetValue(normalizedCode, out var cache) && cache.ActiveQuestionId == activeQuestion?.Id)
+        {
+            answeredCount = cache.Submissions.Count;
+        }
+        else if (activeQuestion != null)
+        {
+            answeredCount = (await repo.GetAnswersForQuestionAsync(activeQuestion.Id, ct)).Count;
+        }
 
         return new SessionDetailDto
         {
@@ -616,11 +849,11 @@ public class QuizSessionManager : IQuizSessionManager
             CreatedAt = session.CreatedAt,
             StartedAt = session.StartedAt,
             EndedAt = session.EndedAt,
-            ParticipantCount = session.Participants.Count,
-            ActiveQuestionNumber = session.CurrentQuestionNumber,
+            ParticipantCount = participants.Count,
+            ActiveQuestionNumber = activeQuestion?.QuestionNumber ?? session.CurrentQuestionNumber,
             ActiveQuestionStatus = activeQuestion?.Status,
             ActiveQuestionVotingEndsAt = activeQuestion?.VotingEndsAt,
-            ActiveQuestionAnsweredCount = answers.Count
+            ActiveQuestionAnsweredCount = answeredCount
         };
     }
 }

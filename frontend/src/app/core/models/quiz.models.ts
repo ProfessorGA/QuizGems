@@ -305,3 +305,27 @@ export interface ParticipantReentryHubDto {
   reenteredAtUtc: string;
   message: string;
 }
+
+export interface SystemErrorLogDto {
+  id: string;
+  sessionId?: string;
+  sessionCode?: string;
+  category: string;
+  severity: string;
+  errorMessage: string;
+  stackTrace?: string;
+  contextData?: string;
+  timestampUtc: string;
+  timestampIst: string;
+  formattedIst: string;
+}
+
+export interface SystemDiagnosticsSummaryDto {
+  totalErrorsLogged: number;
+  totalCriticalCount: number;
+  totalWarningCount: number;
+  serverUptimeUtc: string;
+  serverMemoryMb: number;
+  activeConnections: number;
+  recentLogs: SystemErrorLogDto[];
+}

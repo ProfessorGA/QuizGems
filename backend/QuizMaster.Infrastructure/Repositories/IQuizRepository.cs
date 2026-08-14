@@ -36,6 +36,7 @@ public interface IQuizRepository
     Task<List<QuizAnswer>> GetAnswersForSessionAsync(Guid sessionId, CancellationToken ct = default);
     Task<QuizAnswer> RecordAnswerAsync(QuizAnswer answer, CancellationToken ct = default);
     Task UpdateAnswersBatchAsync(IEnumerable<QuizAnswer> answers, CancellationToken ct = default);
+    Task SaveAnswersBatchAsync(IEnumerable<QuizAnswer> answers, CancellationToken ct = default);
 
     // Admin & Session Maintenance
     Task<AdminUser?> GetAdminByUsernameAsync(string username, CancellationToken ct = default);
@@ -44,4 +45,8 @@ public interface IQuizRepository
     Task ClearParticipantsAndAnswersAsync(Guid sessionId, CancellationToken ct = default);
     Task RestartQuizSessionAsync(Guid sessionId, CancellationToken ct = default);
     Task<bool> CancelQuestionAsync(Guid sessionId, int questionNumber, CancellationToken ct = default);
+
+    // System Diagnostics & Error Logging
+    Task LogSystemErrorAsync(SystemErrorLog log, CancellationToken ct = default);
+    Task<List<SystemErrorLog>> GetSystemLogsAsync(Guid? sessionId = null, int limit = 100, CancellationToken ct = default);
 }

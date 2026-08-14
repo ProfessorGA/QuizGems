@@ -61,6 +61,13 @@ builder.Services.AddHttpClient();
 builder.Services.AddScoped<IQuizRepository, QuizRepository>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IQuizScoringService, QuizScoringService>();
+builder.Services.AddSingleton<IErrorLoggingService, ErrorLoggingService>();
+
+// High-concurrency background answer persistence queue
+builder.Services.AddSingleton<BackgroundAnswerQueueService>();
+builder.Services.AddSingleton<IAnswerQueueService>(sp => sp.GetRequiredService<BackgroundAnswerQueueService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<BackgroundAnswerQueueService>());
+
 builder.Services.AddSingleton<IQuizSessionManager, QuizSessionManager>();
 builder.Services.AddHostedService<ServerKeepAliveService>();
 
@@ -221,6 +228,13 @@ app.Use(async (context, next) =>
     {
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
         logger.LogError(ex, "Server error caught by global middleware: {Message}", ex.Message);
+
+        try
+        {
+            var errorLogger = context.RequestServices.GetRequiredService<IErrorLoggingService>();
+            await errorLogger.LogErrorAsync("HttpMiddleware", $"Unhandled exception on {context.Request.Method} {context.Request.Path}", ex, null, null, "Critical", $"Query: {context.Request.QueryString}");
+        }
+        catch {}
 
         if (!context.Response.HasStarted)
         {

@@ -15,7 +15,9 @@ import {
   QuestionResultHubDto,
   FinalScoreboardDto,
   ParticipantAuditDto,
-  SessionStatus
+  SessionStatus,
+  SystemDiagnosticsSummaryDto,
+  SystemErrorLogDto
 } from '../../../core/models/quiz.models';
 
 @Component({
@@ -74,6 +76,14 @@ import {
               [title]="sound.isMuted() ? 'Unmute Audio' : 'Mute Audio'"
             >
               <i class="bi" [ngClass]="sound.isMuted() ? 'bi-volume-mute-fill text-danger' : 'bi-volume-up-fill text-success'"></i>
+            </button>
+
+            <button 
+              class="btn btn-outline-info btn-sm px-3 py-2 rounded-3 fw-bold" 
+              (click)="openDiagnosticsModal()"
+              title="View system diagnostics, exception logs with IST timestamps, and server health"
+            >
+              <i class="bi bi-activity me-1"></i>Logs & Diagnostics
             </button>
 
             <button 
@@ -681,6 +691,105 @@ import {
         </div>
       </div>
     </div>
+
+    <!-- System Logs & Diagnostics Modal -->
+    <div class="modal fade show d-block" *ngIf="showDiagnosticsModal()" tabindex="-1" style="background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); z-index: 1060;">
+      <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content glass-card rounded-4 p-4 text-white border-info border-opacity-40">
+          
+          <div class="d-flex align-items-center justify-content-between pb-3 border-bottom border-secondary border-opacity-25 mb-3">
+            <div class="d-flex align-items-center gap-3">
+              <div class="p-2 rounded-3 bg-info bg-opacity-10 text-info">
+                <i class="bi bi-activity fs-3"></i>
+              </div>
+              <div>
+                <h2 class="h5 fw-bold text-white mb-0">System Diagnostics & Exception Logs</h2>
+                <span class="text-secondary small">Live IST Timestamps (UTC+5:30) • High-Concurrency Architecture</span>
+              </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+              <button class="btn btn-sm btn-outline-info rounded-3" (click)="loadDiagnostics()" [disabled]="isLoadingDiagnostics()">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+              </button>
+              <button class="btn btn-sm btn-outline-success rounded-3" (click)="exportDiagnosticLogs()">
+                <i class="bi bi-filetype-csv me-1"></i>Export CSV
+              </button>
+              <button type="button" class="btn-close btn-close-white" (click)="closeDiagnosticsModal()"></button>
+            </div>
+          </div>
+
+          <!-- Health Metrics Grid -->
+          <div class="row g-3 mb-3" *ngIf="diagnosticsSummary()">
+            <div class="col-6 col-md-3">
+              <div class="glass-card p-3 rounded-3 text-center">
+                <span class="text-secondary small d-block mb-1">TOTAL LOGS</span>
+                <span class="h4 fw-bold text-white mb-0">{{ diagnosticsSummary()?.totalErrorsLogged || 0 }}</span>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="glass-card p-3 rounded-3 text-center">
+                <span class="text-secondary small d-block mb-1">CRITICAL</span>
+                <span class="h4 fw-bold text-danger mb-0">{{ diagnosticsSummary()?.totalCriticalCount || 0 }}</span>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="glass-card p-3 rounded-3 text-center">
+                <span class="text-secondary small d-block mb-1">WARNINGS</span>
+                <span class="h4 fw-bold text-warning mb-0">{{ diagnosticsSummary()?.totalWarningCount || 0 }}</span>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="glass-card p-3 rounded-3 text-center">
+                <span class="text-secondary small d-block mb-1">SERVER RAM</span>
+                <span class="h4 fw-bold text-info mb-0">{{ diagnosticsSummary()?.serverMemoryMb || 0 }} MB</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Logs Table -->
+          <div class="logs-container glass-card p-3 rounded-3" style="max-height: 380px; overflow-y: auto;">
+            <div *ngIf="diagnosticLogs().length === 0" class="text-center py-4 text-secondary">
+              <i class="bi bi-shield-check fs-2 text-success d-block mb-2"></i>
+              <span>No system errors logged. The server is operating smoothly with 0 exceptions.</span>
+            </div>
+
+            <table class="table table-dark table-hover align-middle mb-0" *ngIf="diagnosticLogs().length > 0">
+              <thead>
+                <tr class="text-secondary small">
+                  <th>TIMESTAMP (IST)</th>
+                  <th>SEVERITY</th>
+                  <th>CATEGORY</th>
+                  <th>ERROR MESSAGE & CONTEXT</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let log of diagnosticLogs()">
+                  <td class="text-nowrap small text-secondary font-monospace">{{ log.formattedIst }}</td>
+                  <td>
+                    <span class="badge" [ngClass]="getSeverityBadgeClass(log.severity)">{{ log.severity }}</span>
+                  </td>
+                  <td class="small fw-bold text-indigo">{{ log.category }}</td>
+                  <td class="small">
+                    <div class="text-white fw-medium">{{ log.errorMessage }}</div>
+                    <div class="text-secondary font-monospace mt-1" style="font-size: 0.75rem;" *ngIf="log.contextData">
+                      Ctx: {{ log.contextData }}
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="modal-footer border-0 p-0 mt-3 d-flex justify-content-end">
+            <button type="button" class="btn btn-secondary px-4 py-2 rounded-3" (click)="closeDiagnosticsModal()">
+              Close
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
   `,
   styles: [`
     .admin-dashboard-wrapper {
@@ -883,6 +992,12 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
   public remainingSeconds = signal<number>(0);
   public answeredCount = signal<number>(0);
   public selectedAuditParticipant = signal<ParticipantAuditDto | null>(null);
+
+  // Diagnostics & Exception Logging Signals
+  public showDiagnosticsModal = signal<boolean>(false);
+  public isLoadingDiagnostics = signal<boolean>(false);
+  public diagnosticsSummary = signal<SystemDiagnosticsSummaryDto | null>(null);
+  public diagnosticLogs = signal<SystemErrorLogDto[]>([]);
 
   private timerInterval: any = null;
 
@@ -1413,6 +1528,64 @@ export class AdminDashboardComponent implements OnInit, OnDestroy {
       case SessionStatus.AnswerReveal: return 'bg-info text-dark';
       case SessionStatus.Completed: return 'bg-success text-white';
       default: return 'bg-secondary text-white';
+    }
+  }
+
+  public openDiagnosticsModal(): void {
+    this.showDiagnosticsModal.set(true);
+    this.loadDiagnostics();
+  }
+
+  public closeDiagnosticsModal(): void {
+    this.showDiagnosticsModal.set(false);
+  }
+
+  public loadDiagnostics(): void {
+    if (!this.sessionId) return;
+    this.isLoadingDiagnostics.set(true);
+
+    this.adminApi.getDiagnostics(this.sessionId).subscribe({
+      next: (summary) => {
+        this.diagnosticsSummary.set(summary);
+        this.diagnosticLogs.set(summary.recentLogs || []);
+        this.isLoadingDiagnostics.set(false);
+      },
+      error: (err) => {
+        console.error('Failed to load diagnostics:', err);
+        this.isLoadingDiagnostics.set(false);
+        this.alertService.info('Diagnostics', 'Could not retrieve live server logs.');
+      }
+    });
+  }
+
+  public exportDiagnosticLogs(): void {
+    if (!this.sessionId) return;
+
+    this.adminApi.exportSystemLogsCsv(this.sessionId).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Quiz_Diagnostics_${this.session()?.sessionCode || 'All'}_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        this.alertService.info('Export Success', 'Diagnostic exception log exported successfully.');
+      },
+      error: (err) => {
+        console.error('Export logs failed:', err);
+        this.alertService.moderate('Export Failed', 'Failed to generate diagnostic log export.');
+      }
+    });
+  }
+
+  public getSeverityBadgeClass(severity: string): string {
+    switch (severity?.toLowerCase()) {
+      case 'critical': return 'bg-danger text-white animate-pulse';
+      case 'error': return 'bg-danger bg-opacity-75 text-white';
+      case 'warning': return 'bg-warning text-dark';
+      default: return 'bg-info text-dark';
     }
   }
 }

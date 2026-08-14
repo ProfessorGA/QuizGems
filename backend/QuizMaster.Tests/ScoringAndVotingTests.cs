@@ -201,7 +201,10 @@ public class ScoringAndVotingTests
         scope.Setup(s => s.ServiceProvider).Returns(sp);
         scopeFactory.Setup(f => f.CreateScope()).Returns(scope.Object);
 
-        var sessionManager = new QuizSessionManager(scopeFactory.Object, mockHubContext.Object);
+        var mockQueue = new Mock<IAnswerQueueService>();
+        var mockLogger = new Mock<IErrorLoggingService>();
+
+        var sessionManager = new QuizSessionManager(scopeFactory.Object, mockHubContext.Object, mockQueue.Object, mockLogger.Object);
 
         // Act 1: First answer submission
         var firstAnswer = await sessionManager.SubmitAnswerAsync(session.SessionCode, participant.Id, selectedOption: 2);
@@ -265,7 +268,10 @@ public class ScoringAndVotingTests
         scope.Setup(s => s.ServiceProvider).Returns(sp);
         scopeFactory.Setup(f => f.CreateScope()).Returns(scope.Object);
 
-        var sessionManager = new QuizSessionManager(scopeFactory.Object, mockHubContext.Object);
+        var mockQueue = new Mock<IAnswerQueueService>();
+        var mockLogger = new Mock<IErrorLoggingService>();
+
+        var sessionManager = new QuizSessionManager(scopeFactory.Object, mockHubContext.Object, mockQueue.Object, mockLogger.Object);
 
         // Act: Submit answer after official timeout
         var lateAnswer = await sessionManager.SubmitAnswerAsync(session.SessionCode, participant.Id, selectedOption: 1);
@@ -352,5 +358,80 @@ public class ScoringAndVotingTests
 
         Assert.Contains(jwtToken.Claims, c => c.Value == "quizadmin");
         Assert.Contains(jwtToken.Claims, c => c.Type == ClaimTypes.Role && c.Value == "Admin");
+    }
+
+    [Fact]
+    public async Task SessionManager_Supports100ConcurrentSubmissionsWithoutOverload()
+    {
+        // Arrange
+        using var context = CreateInMemoryDbContext();
+        var repo = new QuizRepository(context);
+
+        var session = new QuizSession
+        {
+            SessionName = "High-Concurrency 100-User Office Live Test",
+            SessionCode = "SCALE100",
+            Status = SessionStatus.Voting,
+            CurrentQuestionNumber = 1,
+            QuestionDurationSeconds = 15
+        };
+        await repo.CreateSessionAsync(session);
+
+        var question = await repo.CreateQuestionAsync(new QuizQuestion
+        {
+            SessionId = session.Id,
+            QuestionNumber = 1,
+            Status = QuestionStatus.Voting,
+            StartedAt = DateTime.UtcNow,
+            VotingEndsAt = DateTime.UtcNow.AddSeconds(15)
+        });
+
+        var participants = new List<QuizParticipant>();
+        for (int i = 1; i <= 100; i++)
+        {
+            var p = await repo.AddParticipantAsync(new QuizParticipant
+            {
+                SessionId = session.Id,
+                FullName = $"Contestant #{i}"
+            });
+            participants.Add(p);
+        }
+
+        var mockHubContext = new Mock<IHubContext<QuizHub, IQuizHubClient>>();
+        var mockClients = new Mock<IHubClients<IQuizHubClient>>();
+        var mockGroup = new Mock<IQuizHubClient>();
+        mockClients.Setup(c => c.Group(It.IsAny<string>())).Returns(mockGroup.Object);
+        mockHubContext.Setup(h => h.Clients).Returns(mockClients.Object);
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IQuizRepository>(repo);
+        services.AddSingleton<IQuizScoringService>(new QuizScoringService(repo));
+        var sp = services.BuildServiceProvider();
+        var scopeFactory = new Mock<IServiceScopeFactory>();
+        var scope = new Mock<IServiceScope>();
+        scope.Setup(s => s.ServiceProvider).Returns(sp);
+        scopeFactory.Setup(f => f.CreateScope()).Returns(scope.Object);
+
+        var mockQueue = new Mock<IAnswerQueueService>();
+        var mockLogger = new Mock<IErrorLoggingService>();
+
+        var sessionManager = new QuizSessionManager(scopeFactory.Object, mockHubContext.Object, mockQueue.Object, mockLogger.Object);
+
+        // Act: 100 contestants simultaneously submit their answers in parallel tasks
+        var tasks = participants.Select(p => Task.Run(async () =>
+        {
+            var option = (p.FullName.GetHashCode() % 4) + 1;
+            if (option <= 0) option = 1;
+            return await sessionManager.SubmitAnswerAsync(session.SessionCode, p.Id, option);
+        })).ToList();
+
+        var results = await Task.WhenAll(tasks);
+
+        // Assert: 100% of the 100 concurrent submissions succeeded without dropping any votes
+        Assert.Equal(100, results.Length);
+        Assert.All(results, res => Assert.True(res.Success, $"Submission failed: {res.Message}"));
+
+        // Verify queue received 100 answers
+        mockQueue.Verify(q => q.EnqueueAnswerAsync(It.IsAny<QuizAnswer>(), It.IsAny<CancellationToken>()), Times.Exactly(100));
     }
 }
